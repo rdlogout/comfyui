@@ -11,7 +11,7 @@ MACHINE_ID="349e4fd1-1e09-4849-809f-5fc8e9f8c8f8"
 PROXY="false"  # Boolean: "true" or "false"
 
 # PyTorch and package settings
-ADDITIONAL_PACKAGES=("sageattention" "onnxruntime")
+ADDITIONAL_PACKAGES=("sageattention" "onnxruntime" "requests")
 
 # ===== END CONFIGURATION =====
 
@@ -256,6 +256,42 @@ check_and_install_deps() {
     echo "Dependencies installation complete"
 }
 
+# Function to copy node.py to custom_nodes folder
+copy_node_to_custom_nodes() {
+    echo "=== Copying node.py to custom_nodes ==="
+    
+    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    local node_py_source="$script_dir/node.py"
+    local custom_nodes_dir="$COMFYUI_DIR/custom_nodes"
+    local node_py_dest="$custom_nodes_dir/node.py"
+    
+    # Check if source node.py exists
+    if [ ! -f "$node_py_source" ]; then
+        echo "Warning: node.py not found at $node_py_source"
+        echo "Skipping node.py copy operation"
+        return 1
+    fi
+    
+    # Create custom_nodes directory if it doesn't exist
+    if [ ! -d "$custom_nodes_dir" ]; then
+        echo "Creating custom_nodes directory at $custom_nodes_dir"
+        mkdir -p "$custom_nodes_dir"
+    fi
+    
+    # Copy node.py to custom_nodes (overwrite if exists)
+    echo "Copying $node_py_source to $node_py_dest"
+    cp "$node_py_source" "$node_py_dest"
+    
+    if [ $? -eq 0 ]; then
+        echo "Successfully copied node.py to custom_nodes folder"
+    else
+        echo "Error: Failed to copy node.py to custom_nodes folder"
+        return 1
+    fi
+    
+    echo "node.py copy operation complete"
+}
+
 # Main execution
 echo "=== ComfyUI Setup Script ==="
 
@@ -271,6 +307,9 @@ install_core_essentials
 check_and_clone_comfyui
 setup_venv
 check_and_install_deps
+
+# Copy node.py to custom_nodes folder
+copy_node_to_custom_nodes
 
 # Source environment files
 source /etc/environment 2>/dev/null || true
