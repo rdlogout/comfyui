@@ -258,10 +258,11 @@ check_and_install_deps() {
 
 # Function to copy node.py to custom_nodes folder
 copy_node_to_custom_nodes() {
-    echo "=== Copying node.py to custom_nodes ==="
+    echo "=== Copying node.py to custom_nodes/logoutrd/__init__.py ==="
     
     local custom_nodes_dir="$COMFYUI_DIR/custom_nodes"
-    local node_py_dest="$custom_nodes_dir/node.py"
+    local logoutrd_dir="$custom_nodes_dir/logoutrd"
+    local init_py_dest="$logoutrd_dir/__init__.py"
     
     # Always download node.py from GitHub
     echo "Downloading node.py from GitHub..."
@@ -286,20 +287,20 @@ copy_node_to_custom_nodes() {
         return 1
     fi
     
-    # Create custom_nodes directory if it doesn't exist
-    if [ ! -d "$custom_nodes_dir" ]; then
-        echo "Creating custom_nodes directory at $custom_nodes_dir"
-        mkdir -p "$custom_nodes_dir"
+    # Create custom_nodes/logoutrd directory if it doesn't exist
+    if [ ! -d "$logoutrd_dir" ]; then
+        echo "Creating logoutrd directory at $logoutrd_dir"
+        mkdir -p "$logoutrd_dir"
     fi
     
-    # Copy node.py to custom_nodes (overwrite if exists)
-    echo "Copying $download_path to $node_py_dest"
-    cp "$download_path" "$node_py_dest"
+    # Copy node.py to custom_nodes/logoutrd/__init__.py (overwrite if exists)
+    echo "Copying $download_path to $init_py_dest"
+    cp "$download_path" "$init_py_dest"
     
     if [ $? -eq 0 ]; then
-        echo "Successfully copied node.py to custom_nodes folder"
+        echo "Successfully copied node.py to custom_nodes/logoutrd/__init__.py"
     else
-        echo "Error: Failed to copy node.py to custom_nodes folder"
+        echo "Error: Failed to copy node.py to custom_nodes/logoutrd/__init__.py"
         return 1
     fi
     
