@@ -1,0 +1,119 @@
+{
+  "1": {
+    "inputs": {
+      "ckpt_name": "rife49.pth",
+      "clear_cache_after_n_frames": 10,
+      "multiplier": [
+        "7",
+        0
+      ],
+      "fast_mode": true,
+      "ensemble": true,
+      "scale_factor": 1,
+      "frames": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "RIFE VFI",
+    "_meta": {
+      "title": "RIFE VFI (recommend rife47 and rife49)"
+    }
+  },
+  "2": {
+    "inputs": {
+      "video": "0c24fd7e-8abd-4689-a2bb-f271a2d87457-video_169ebf59.mp4",
+      "force_rate": 0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideo",
+    "_meta": {
+      "title": "Load Video (Upload) 🎥🅥🅗🅢"
+    }
+  },
+  "3": {
+    "inputs": {
+      "frame_rate": [
+        "6",
+        0
+      ],
+      "loop_count": 0,
+      "filename_prefix": "vfi",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "1",
+        0
+      ],
+      "audio": [
+        "2",
+        2
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "5": {
+    "inputs": {
+      "video_info": [
+        "2",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "6": {
+    "inputs": {
+      "a": [
+        "5",
+        0
+      ],
+      "b": [
+        "8",
+        0
+      ],
+      "operation": "multiply"
+    },
+    "class_type": "easy mathFloat",
+    "_meta": {
+      "title": "Math Float"
+    }
+  },
+  "7": {
+    "inputs": {
+      "value": 2
+    },
+    "class_type": "easy int",
+    "_meta": {
+      "title": "Multiply FPS"
+    }
+  },
+  "8": {
+    "inputs": {
+      "output_type": "float",
+      "*": [
+        "7",
+        0
+      ]
+    },
+    "class_type": "easy convertAnything",
+    "_meta": {
+      "title": "Convert Any"
+    }
+  }
+}

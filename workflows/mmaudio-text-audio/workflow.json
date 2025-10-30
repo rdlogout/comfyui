@@ -1,0 +1,218 @@
+{
+  "id": "eb88f251-41d5-4dbf-a6e5-93b0460e8d14",
+  "revision": 0,
+  "last_node_id": 4,
+  "last_link_id": 3,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "MMAudioModelLoader",
+      "pos": [
+        2048.305908203125,
+        -22.49142074584961
+      ],
+      "size": [
+        438.219970703125,
+        83.87998962402344
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "mmaudio_model",
+          "type": "MMAUDIO_MODEL",
+          "slot_index": 0,
+          "links": [
+            1
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-mmaudio",
+        "ver": "841b307095f3cdc448d940a5787bc36706e49f1d",
+        "Node name for S&R": "MMAudioModelLoader"
+      },
+      "widgets_values": [
+        "mmaudio_large_44k_v2_fp16.safetensors",
+        "fp16"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "MMAudioFeatureUtilsLoader",
+      "pos": [
+        1982.910888671875,
+        137.04734802246094
+      ],
+      "size": [
+        487.2332763671875,
+        154
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "bigvgan_vocoder_model",
+          "shape": 7,
+          "type": "VOCODER_MODEL",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "mmaudio_featureutils",
+          "type": "MMAUDIO_FEATUREUTILS",
+          "links": [
+            2
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-mmaudio",
+        "ver": "841b307095f3cdc448d940a5787bc36706e49f1d",
+        "Node name for S&R": "MMAudioFeatureUtilsLoader"
+      },
+      "widgets_values": [
+        "mmaudio_vae_44k_fp16.safetensors",
+        "mmaudio_synchformer_fp16.safetensors",
+        "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+        "44k",
+        "fp16"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "PreviewAudio",
+      "pos": [
+        3248.755126953125,
+        -111.70340728759766
+      ],
+      "size": [
+        315,
+        88
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "link": 3
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.59",
+        "Node name for S&R": "PreviewAudio"
+      },
+      "widgets_values": []
+    },
+    {
+      "id": 3,
+      "type": "MMAudioSampler",
+      "pos": [
+        2650.74169921875,
+        -123.26512145996094
+      ],
+      "size": [
+        411.29339599609375,
+        354
+      ],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "mmaudio_model",
+          "type": "MMAUDIO_MODEL",
+          "link": 1
+        },
+        {
+          "name": "feature_utils",
+          "type": "MMAUDIO_FEATUREUTILS",
+          "link": 2
+        },
+        {
+          "name": "images",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "audio",
+          "type": "AUDIO",
+          "slot_index": 0,
+          "links": [
+            3
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-mmaudio",
+        "ver": "841b307095f3cdc448d940a5787bc36706e49f1d",
+        "Node name for S&R": "MMAudioSampler"
+      },
+      "widgets_values": [
+        3,
+        25,
+        4.5,
+        7,
+        "fixed",
+        "",
+        "",
+        false,
+        true
+      ]
+    }
+  ],
+  "links": [
+    [
+      1,
+      1,
+      0,
+      3,
+      0,
+      "MMAUDIO_MODEL"
+    ],
+    [
+      2,
+      2,
+      0,
+      3,
+      1,
+      "MMAUDIO_FEATUREUTILS"
+    ],
+    [
+      3,
+      3,
+      0,
+      4,
+      0,
+      "AUDIO"
+    ]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.826446280991736,
+      "offset": [
+        -1477.8303776806756,
+        361.95127506474995
+      ]
+    },
+    "frontendVersion": "1.26.11",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}

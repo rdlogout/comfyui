@@ -1,0 +1,62 @@
+{
+  "1": {
+    "inputs": {
+      "mmaudio_model": "mmaudio_large_44k_v2_fp16.safetensors",
+      "base_precision": "fp16"
+    },
+    "class_type": "MMAudioModelLoader",
+    "_meta": {
+      "title": "MMAudio ModelLoader"
+    }
+  },
+  "2": {
+    "inputs": {
+      "vae_model": "mmaudio_vae_44k_fp16.safetensors",
+      "synchformer_model": "mmaudio_synchformer_fp16.safetensors",
+      "clip_model": "apple_DFN5B-CLIP-ViT-H-14-384_fp16.safetensors",
+      "mode": "44k",
+      "precision": "fp16"
+    },
+    "class_type": "MMAudioFeatureUtilsLoader",
+    "_meta": {
+      "title": "MMAudio FeatureUtilsLoader"
+    }
+  },
+  "3": {
+    "inputs": {
+      "duration": 3,
+      "steps": 25,
+      "cfg": 4.5,
+      "seed": 7,
+      "prompt": "",
+      "negative_prompt": "",
+      "mask_away_clip": false,
+      "force_offload": true,
+      "mmaudio_model": [
+        "1",
+        0
+      ],
+      "feature_utils": [
+        "2",
+        0
+      ]
+    },
+    "class_type": "MMAudioSampler",
+    "_meta": {
+      "title": "MMAudio Sampler"
+    }
+  },
+  "4": {
+    "inputs": {
+      "audioUI": "",
+      "audio": [
+        "3",
+        0
+      ]
+    },
+    "class_type": "PreviewAudio",
+    "_meta": {
+      "title": "PreviewAudio"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+	"name": "my-app",
+	"scripts": {
+		"dev": "bun run --hot src/index.ts",
+		"build": "bun build src/index.ts --outdir public --target bun"
+	},
+	"dependencies": {
+		"@orpc/client": "^1.10.2",
+		"@orpc/server": "^1.10.2",
+		"@saintno/comfyui-sdk": "^0.2.49",
+		"hono": "^4.10.2",
+		"reconnecting-websocket": "^4.4.0",
+		"reconnectingwebsocket": "^1.0.0"
+	},
+	"devDependencies": {
+		"@types/bun": "latest",
+		"@types/reconnectingwebsocket": "^1.0.10"
+	}
+}

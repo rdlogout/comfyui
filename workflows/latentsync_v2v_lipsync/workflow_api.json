@@ -1,0 +1,103 @@
+{
+  "1": {
+    "inputs": {
+      "video_path": [
+        "6",
+        0
+      ],
+      "audio_path": [
+        "7",
+        0
+      ],
+      "seed": 265,
+      "lips_expression": 1.4,
+      "inference_steps": 20
+    },
+    "class_type": "VideoBasicLatentSyncNode",
+    "_meta": {
+      "title": "VideoBasic LatentSync Node"
+    }
+  },
+  "2": {
+    "inputs": {
+      "video": [
+        "1",
+        0
+      ],
+      "force_rate": 0,
+      "custom_width": 0,
+      "custom_height": 0,
+      "frame_load_cap": 0,
+      "skip_first_frames": 0,
+      "select_every_nth": 1,
+      "format": "AnimateDiff"
+    },
+    "class_type": "VHS_LoadVideoPath",
+    "_meta": {
+      "title": "Load Video (Path) 🎥🅥🅗🅢"
+    }
+  },
+  "3": {
+    "inputs": {
+      "frame_rate": [
+        "5",
+        0
+      ],
+      "loop_count": 0,
+      "filename_prefix": "v2v_lipsync",
+      "format": "video/h264-mp4",
+      "pix_fmt": "yuv420p",
+      "crf": 19,
+      "save_metadata": true,
+      "trim_to_audio": false,
+      "pingpong": false,
+      "save_output": true,
+      "images": [
+        "2",
+        0
+      ],
+      "audio": [
+        "2",
+        2
+      ]
+    },
+    "class_type": "VHS_VideoCombine",
+    "_meta": {
+      "title": "Video Combine 🎥🅥🅗🅢"
+    }
+  },
+  "5": {
+    "inputs": {
+      "video_info": [
+        "2",
+        3
+      ]
+    },
+    "class_type": "VHS_VideoInfo",
+    "_meta": {
+      "title": "Video Info 🎥🅥🅗🅢"
+    }
+  },
+  "6": {
+    "inputs": {
+      "string_a": "input",
+      "string_b": "video.mp4",
+      "delimiter": "/"
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Video Concat"
+    }
+  },
+  "7": {
+    "inputs": {
+      "string_a": "input",
+      "string_b": "audio.mp3",
+      "delimiter": "/"
+    },
+    "class_type": "StringConcatenate",
+    "_meta": {
+      "title": "Audio Concat"
+    }
+  }
+}
