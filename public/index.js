@@ -2364,7 +2364,8 @@ class RPCLink extends StandardRPCLink {
 
 // src/lib/api.ts
 var machineId = process.env.MACHINE_ID || "c7f8de03-3f70-4386-acf0-bef80eab22ca";
-var DEV = true;
+var DEV = Bun.env.NODE_ENV === "development";
+console.log("NODE_ENV:", Bun.env.NODE_ENV);
 var DOMAIN = DEV ? `localhost:8787` : `fussion.studio`;
 var BASE_URL = `http${DEV ? "" : "s"}://${DOMAIN}`;
 var WS_URL = `ws${DEV ? "" : "s"}://${DOMAIN}`;

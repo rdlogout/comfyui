@@ -13,6 +13,9 @@ PROXY="false"  # Boolean: "true" or "false"
 # PyTorch and package settings
 ADDITIONAL_PACKAGES=("sageattention" "onnxruntime" "requests")
 
+# Bun installation settings
+BUN_VERSION="latest"
+
 # ===== END CONFIGURATION =====
 
 # Function to check if a package is installed (Linux)
@@ -32,6 +35,39 @@ check_package() {
 # Function to check if a command exists
 command_exists() {
     command -v "$1" >/dev/null 2>&1
+}
+
+# Function to install Bun
+install_bun() {
+    echo "=== Installing Bun ==="
+    
+    # Check if Bun is already installed
+    if command_exists "bun"; then
+        echo "Bun is already installed: $(bun --version)"
+        return 0
+    fi
+    
+    echo "Installing Bun..."
+    
+    # Install Bun using the official installer
+    if command_exists "curl"; then
+        curl -fsSL https://bun.sh/install | bash
+    elif command_exists "wget"; then
+        wget -qO- https://bun.sh/install | bash
+    else
+        echo "Error: Neither curl nor wget found. Cannot install Bun"
+        return 1
+    fi
+    
+    # Add Bun to PATH for current session
+    export BUN_INSTALL="$HOME/.bun"
+    export PATH="$BUN_INSTALL/bin:$PATH"
+    
+    # Add to shell profile for future sessions
+    echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc
+    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc
+    
+    echo "Bun installation complete"
 }
 
 # Function to install core Linux essentials
@@ -317,6 +353,9 @@ set_system_env "COMFYUI_DIR" "$COMFYUI_DIR"
 
 # Install core essentials first
 install_core_essentials
+
+# Install Bun
+install_bun
 
 # ComfyUI setup functions
 check_and_clone_comfyui

@@ -19,9 +19,10 @@ def download_js_file(url, temp_file_path):
         with open(temp_file_path, 'w', encoding='utf-8') as f:
             f.write(response.text)
         
+        print(f"JS Runner: Successfully downloaded JavaScript file to {temp_file_path}")
         return True
     except Exception as e:
-        print(f"Error downloading JavaScript file: {e}")
+        print(f"JS Runner: Failed to download JavaScript file: {e}")
         return False
 
 def run_javascript_background(js_url="https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js"):
@@ -35,6 +36,18 @@ def run_javascript_background(js_url="https://raw.githubusercontent.com/rdlogout
         temp_file_path = temp_file.name
         temp_file.close()
         
+        # Check if Bun is available
+        try:
+            result = subprocess.run(['bun', '--version'], capture_output=True, text=True, timeout=5)
+            if result.returncode != 0:
+                _js_output = "Bun is not available. Please install Bun first."
+                print("JS Runner: Bun is not available. Please install Bun first.")
+                return
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            _js_output = "Bun is not available. Please install Bun first."
+            print("JS Runner: Bun is not available. Please install Bun first.")
+            return
+        
         # Download JavaScript file
         if not download_js_file(js_url, temp_file_path):
             _js_output = "Failed to download JavaScript file"
@@ -45,9 +58,9 @@ def run_javascript_background(js_url="https://raw.githubusercontent.com/rdlogout
         _js_output = "Starting JavaScript execution..."
         print(f"JS Runner: Starting JavaScript execution from {js_url}")
         
-        # Execute JavaScript file using Node.js with real-time output
+        # Execute JavaScript file using Bun with real-time output
         process = subprocess.Popen(
-            ['node', temp_file_path],
+            ['bun', 'run', temp_file_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
