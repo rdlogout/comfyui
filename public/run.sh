@@ -260,8 +260,15 @@ check_and_install_deps() {
 copy_node_to_custom_nodes() {
     echo "=== Copying node.py to custom_nodes ==="
     
+    # Get the directory where this script is located
     local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     local node_py_source="$script_dir/node.py"
+    
+    # If node.py is not found in script directory, try current working directory
+    if [ ! -f "$node_py_source" ]; then
+        node_py_source="$(pwd)/node.py"
+    fi
+    
     local custom_nodes_dir="$COMFYUI_DIR/custom_nodes"
     local node_py_dest="$custom_nodes_dir/node.py"
     
