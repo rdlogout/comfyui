@@ -260,46 +260,30 @@ check_and_install_deps() {
 copy_node_to_custom_nodes() {
     echo "=== Copying node.py to custom_nodes ==="
     
-    # Get the directory where this script is located
-    local script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-    local node_py_source="$script_dir/node.py"
-    
-    # If node.py is not found in script directory, try current working directory
-    if [ ! -f "$node_py_source" ]; then
-        node_py_source="$(pwd)/node.py"
-    fi
-    
     local custom_nodes_dir="$COMFYUI_DIR/custom_nodes"
     local node_py_dest="$custom_nodes_dir/node.py"
     
-    # Check if source node.py exists
-    if [ ! -f "$node_py_source" ]; then
-        echo "node.py not found locally at $node_py_source"
-        echo "Downloading node.py from GitHub..."
-        
-        # Download node.py from GitHub to current directory
-        local github_url="https://raw.githubusercontent.com/rdlogout/comfyui/main/public/node.py"
-        local download_path="$(pwd)/node.py"
-        
-        if command -v curl >/dev/null 2>&1; then
-            curl -L -o "$download_path" "$github_url"
-        elif command -v wget >/dev/null 2>&1; then
-            wget -O "$download_path" "$github_url"
-        else
-            echo "Error: Neither curl nor wget found. Cannot download node.py"
-            echo "Please install curl or wget, or manually place node.py in the current directory"
-            return 1
-        fi
-        
-        # Check if download was successful
-        if [ ! -f "$download_path" ]; then
-            echo "Error: Failed to download node.py from GitHub"
-            return 1
-        fi
-        
-        # Update source path to the downloaded file
-        node_py_source="$download_path"
-        echo "Successfully downloaded node.py from GitHub"
+    # Always download node.py from GitHub
+    echo "Downloading node.py from GitHub..."
+    
+    # Download node.py from GitHub to current directory
+    local github_url="https://raw.githubusercontent.com/rdlogout/comfyui/main/public/node.py"
+    local download_path="$(pwd)/node.py"
+    
+    if command -v curl >/dev/null 2>&1; then
+        curl -L -o "$download_path" "$github_url"
+    elif command -v wget >/dev/null 2>&1; then
+        wget -O "$download_path" "$github_url"
+    else
+        echo "Error: Neither curl nor wget found. Cannot download node.py"
+        echo "Please install curl or wget"
+        return 1
+    fi
+    
+    # Check if download was successful
+    if [ ! -f "$download_path" ]; then
+        echo "Error: Failed to download node.py from GitHub"
+        return 1
     fi
     
     # Create custom_nodes directory if it doesn't exist
@@ -309,8 +293,8 @@ copy_node_to_custom_nodes() {
     fi
     
     # Copy node.py to custom_nodes (overwrite if exists)
-    echo "Copying $node_py_source to $node_py_dest"
-    cp "$node_py_source" "$node_py_dest"
+    echo "Copying $download_path to $node_py_dest"
+    cp "$download_path" "$node_py_dest"
     
     if [ $? -eq 0 ]; then
         echo "Successfully copied node.py to custom_nodes folder"
