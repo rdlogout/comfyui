@@ -7,7 +7,7 @@ COMFYUI_DIR="$WORKSPACE_DIR/ComfyUI"
 VENV_PATH="$COMFYUI_DIR/venv"
 
 # Environment variables
-MACHINE_ID="349e4fd1-1e09-4849-809f-5fc8e9f8c8f8"
+MACHINE_ID="c7f8de03-3f70-4386-acf0-bef80eab22ca"
 PROXY="false"  # Boolean: "true" or "false"
 
 # PyTorch and package settings
