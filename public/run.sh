@@ -1,5 +1,5 @@
 #!/bin/bash
-
+# git reset --hard origin/main && git pull && chmod 777 run.sh && ./run.sh
 # ===== CONFIGURATION VARIABLES =====
 # Workspace and directory settings
 WORKSPACE_DIR="$HOME"

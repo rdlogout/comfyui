@@ -136,7 +136,66 @@ class JSRunner:
                     except:
                         pass
 
-# Example usage
+# ComfyUI Custom Node Implementation
+class JSRunnerNode:
+    """
+    ComfyUI custom node that wraps the JSRunner functionality
+    """
+    
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "trigger": ("BOOLEAN", {"default": True}),
+            },
+            "optional": {
+                "js_url": ("STRING", {"default": "https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js"}),
+            }
+        }
+    
+    RETURN_TYPES = ("STRING", "BOOLEAN")
+    RETURN_NAMES = ("output", "success")
+    FUNCTION = "execute_js"
+    CATEGORY = "utilities"
+    
+    def execute_js(self, trigger, js_url=None):
+        """Execute JavaScript using JSRunner"""
+        if not trigger:
+            return ("Execution skipped", False)
+        
+        try:
+            runner = JSRunner()
+            
+            # Override JS_URL if provided
+            if js_url and js_url.strip():
+                global JS_URL
+                original_url = JS_URL
+                JS_URL = js_url.strip()
+            
+            success = runner.run_javascript()
+            
+            # Restore original URL if it was changed
+            if js_url and js_url.strip():
+                JS_URL = original_url
+            
+            if success:
+                return ("JavaScript executed successfully", True)
+            else:
+                return ("JavaScript execution failed", False)
+                
+        except Exception as e:
+            return (f"Error: {str(e)}", False)
+
+# Required for ComfyUI custom nodes
+NODE_CLASS_MAPPINGS = {
+    "JSRunnerNode": JSRunnerNode
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    "JSRunnerNode": "JS Runner"
+}
+
+# Example usage (for standalone execution)
 if __name__ == "__main__":
     runner = JSRunner()
     runner.run_javascript()
