@@ -59,13 +59,15 @@ def run_javascript_background(js_url="https://raw.githubusercontent.com/rdlogout
         print(f"JS Runner: Starting JavaScript execution from {js_url}")
         
         # Execute JavaScript file using Bun with real-time output
+        # Pass system environment variables to the process
         process = subprocess.Popen(
             ['bun', 'run', temp_file_path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             bufsize=1,
-            universal_newlines=True
+            universal_newlines=True,
+            env=os.environ  # Pass all system environment variables
         )
         
         # Capture output in real-time

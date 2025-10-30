@@ -39,15 +39,19 @@ command_exists() {
 
 # Function to install Bun
 install_bun() {
-    echo "=== Installing Bun ==="
+    echo "=== Checking Bun Installation ==="
     
     # Check if Bun is already installed
     if command_exists "bun"; then
         echo "Bun is already installed: $(bun --version)"
+        
+        # Ensure PATH is set for current session
+        export BUN_INSTALL="$HOME/.bun"
+        export PATH="$BUN_INSTALL/bin:$PATH"
         return 0
     fi
     
-    echo "Installing Bun..."
+    echo "Bun not found, installing..."
     
     # Install Bun using the official installer
     if command_exists "curl"; then
@@ -63,9 +67,13 @@ install_bun() {
     export BUN_INSTALL="$HOME/.bun"
     export PATH="$BUN_INSTALL/bin:$PATH"
     
-    # Add to shell profile for future sessions
-    echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc
-    echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc
+    # Add to shell profile for future sessions (only if not already present)
+    if ! grep -q "export BUN_INSTALL=" ~/.bashrc 2>/dev/null; then
+        echo 'export BUN_INSTALL="$HOME/.bun"' >> ~/.bashrc
+    fi
+    if ! grep -q "export PATH=.*BUN_INSTALL" ~/.bashrc 2>/dev/null; then
+        echo 'export PATH="$BUN_INSTALL/bin:$PATH"' >> ~/.bashrc
+    fi
     
     echo "Bun installation complete"
 }
