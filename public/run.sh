@@ -274,9 +274,32 @@ copy_node_to_custom_nodes() {
     
     # Check if source node.py exists
     if [ ! -f "$node_py_source" ]; then
-        echo "Warning: node.py not found at $node_py_source"
-        echo "Skipping node.py copy operation"
-        return 1
+        echo "node.py not found locally at $node_py_source"
+        echo "Downloading node.py from GitHub..."
+        
+        # Download node.py from GitHub to current directory
+        local github_url="https://raw.githubusercontent.com/rdlogout/comfyui/main/public/node.py"
+        local download_path="$(pwd)/node.py"
+        
+        if command -v curl >/dev/null 2>&1; then
+            curl -L -o "$download_path" "$github_url"
+        elif command -v wget >/dev/null 2>&1; then
+            wget -O "$download_path" "$github_url"
+        else
+            echo "Error: Neither curl nor wget found. Cannot download node.py"
+            echo "Please install curl or wget, or manually place node.py in the current directory"
+            return 1
+        fi
+        
+        # Check if download was successful
+        if [ ! -f "$download_path" ]; then
+            echo "Error: Failed to download node.py from GitHub"
+            return 1
+        fi
+        
+        # Update source path to the downloaded file
+        node_py_source="$download_path"
+        echo "Successfully downloaded node.py from GitHub"
     fi
     
     # Create custom_nodes directory if it doesn't exist
