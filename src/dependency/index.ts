@@ -9,10 +9,12 @@ type Dependency = {
 };
 export const syncDependencies = async (dependencies: Dependency[]) => {
 	// if(!isA)
+	console.log("Syncing dependencies");
+	console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
 	const customNodes = dependencies.filter((d) => d.type === "custom_node");
 	const models = dependencies.filter((d) => d.type === "model");
 
-	console.log(customNodes, models);
+	// console.log(customNodes, models);
 
 	// throw new Error("Not implemented");
 
@@ -25,7 +27,9 @@ export const syncDependencies = async (dependencies: Dependency[]) => {
 		return { id: model.id, type: "model", success: resp.success, message: resp.message };
 	});
 	const results = await Promise.all([...nodePromises, ...modelPromises]);
-	console.log(results);
-	await api.client.updateDependencies(results);
+	const successResult = results.filter((r) => r.success);
+	console.log("Successfully synced dependencies:");
+	console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
+	await api.client.updateDependencies(successResult);
 	// await server.machines.(results);
 };

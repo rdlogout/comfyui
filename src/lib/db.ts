@@ -1,6 +1,24 @@
 import { Database } from "bun:sqlite";
 const db = new Database("comfyui.sqlite");
 
+type Task = {
+	id: string;
+	prompt_id?: string;
+	status?: string;
+	progress?: number;
+	queued_at?: string;
+	started_at?: string;
+	ended_at?: string;
+	error?: string;
+	active_node_id?: string;
+	logs?: string;
+	files?: string;
+	name?: string;
+	endpoint?: string;
+	created_at?: string;
+	updated_at?: string;
+};
+
 db.run(`
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
@@ -84,6 +102,18 @@ export const updateTask = (
 	}
 };
 
-export const getTask = (id: string): any => {
-	return db.query("SELECT * FROM prompts WHERE id = ?").get(id);
+export const getTask = (id: string): Task => {
+	let task = db.query("SELECT * FROM tasks WHERE id = ?").get(id) as Task | undefined;
+	if (!task) {
+		db.run(`INSERT INTO tasks (id) VALUES (?)`, [id]);
+		task = { id };
+	}
+	return task;
+};
+
+export const updatePromptId = (id: string, prompt_id: string): boolean => {
+	const task = getTask(id);
+	if (task.prompt_id) return false;
+	updateTask(id, { prompt_id });
+	return true;
 };

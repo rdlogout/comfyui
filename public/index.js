@@ -69,12 +69,12 @@ function __spread() {
     ar = ar.concat(__read(arguments[i]));
   return ar;
 }
-var Event = function() {
-  function Event2(type, target) {
+var Event2 = function() {
+  function Event3(type, target) {
     this.target = target;
     this.type = type;
   }
-  return Event2;
+  return Event3;
 }();
 var ErrorEvent = function(_super) {
   __extends(ErrorEvent2, _super);
@@ -85,7 +85,7 @@ var ErrorEvent = function(_super) {
     return _this;
   }
   return ErrorEvent2;
-}(Event);
+}(Event2);
 var CloseEvent = function(_super) {
   __extends(CloseEvent2, _super);
   function CloseEvent2(code, reason, target) {
@@ -102,7 +102,7 @@ var CloseEvent = function(_super) {
     return _this;
   }
   return CloseEvent2;
-}(Event);
+}(Event2);
 /*!
  * Reconnecting WebSocket
  * by Pedro Ladaria <pedro.ladaria@gmail.com>
@@ -699,6 +699,21 @@ function parseGitHubUrl(url) {
     return null;
   }
 }
+async function existsCaseInsensitive(targetPath) {
+  try {
+    const parentDir = path.dirname(targetPath);
+    const targetName = path.basename(targetPath);
+    if (!existsSync(parentDir)) {
+      return null;
+    }
+    const files = await fs.readdir(parentDir);
+    const match = files.find((file) => file.toLowerCase() === targetName.toLowerCase());
+    return match ? path.join(parentDir, match) : null;
+  } catch (error) {
+    console.error(`Error checking case-insensitive existence for ${targetPath}:`, error);
+    return null;
+  }
+}
 function getComfyUIPath() {
   return process.env.COMFYUI_PATH || "/path/to/comfyui";
 }
@@ -733,9 +748,11 @@ async function syncNode(nodeUrl) {
       console.log(`Using fallback parsing for non-GitHub URL: ${repoName}`);
     }
     const repoPath = path.join(customNodesPath, repoName);
-    if (existsSync(repoPath)) {
-      console.log(`Custom node ${repoName} already exists`);
-      const requirementsPath2 = path.join(repoPath, "requirements.txt");
+    const existingRepoPath = await existsCaseInsensitive(repoPath);
+    if (existingRepoPath) {
+      console.log(`Custom node ${repoName} already exists at ${existingRepoPath}`);
+      const actualRepoPath = existingRepoPath;
+      const requirementsPath2 = path.join(actualRepoPath, "requirements.txt");
       if (existsSync(requirementsPath2)) {
         const analysis = await analyzeRequirements(requirementsPath2, repoName);
         if (analysis.safeToInstall.length > 0) {
@@ -745,7 +762,7 @@ async function syncNode(nodeUrl) {
         return {
           success: true,
           alreadyExists: true,
-          message: `Custom node ${repoName} already exists, dependencies being updated in background`,
+          message: `Custom node ${repoName} already exists at ${actualRepoPath}, dependencies being updated in background`,
           repoName,
           dependenciesInstalled: analysis.safeToInstall.length,
           skippedDependencies: analysis.skippedCritical.length
@@ -754,17 +771,17 @@ async function syncNode(nodeUrl) {
       return {
         success: true,
         alreadyExists: true,
-        message: `Custom node ${repoName} already exists`,
+        message: `Custom node ${repoName} already exists at ${actualRepoPath}`,
         repoName
       };
     }
     console.log(`Cloning custom node from ${cloneUrl} (branch: ${branch})`);
     if (branch && branch !== "main") {
       await execAsync(`git clone --branch ${branch} --single-branch ${cloneUrl} ${repoPath}`);
-      console.log(`Custom node ${repoName} (branch: ${branch}) installed successfully`);
+      console.log(`Custom node ${repoName} (branch: ${branch}) installed successfully to ${repoPath}`);
     } else {
       await execAsync(`git clone ${cloneUrl} ${repoPath}`);
-      console.log(`Custom node ${repoName} installed successfully`);
+      console.log(`Custom node ${repoName} installed successfully to ${repoPath}`);
     }
     const requirementsPath = path.join(repoPath, "requirements.txt");
     if (existsSync(requirementsPath)) {
@@ -776,7 +793,7 @@ async function syncNode(nodeUrl) {
       return {
         success: true,
         alreadyExists: false,
-        message: `Custom node ${repoName} installed successfully, dependencies being installed in background`,
+        message: `Custom node ${repoName} installed successfully to ${repoPath}, dependencies being installed in background`,
         repoName,
         dependenciesInstalled: analysis.safeToInstall.length,
         skippedDependencies: analysis.skippedCritical.length
@@ -785,7 +802,7 @@ async function syncNode(nodeUrl) {
     return {
       success: true,
       alreadyExists: false,
-      message: `Custom node ${repoName} installed successfully`,
+      message: `Custom node ${repoName} installed successfully to ${repoPath}`,
       repoName
     };
   } catch (error) {
@@ -803,7 +820,6 @@ async function syncNode(nodeUrl) {
 // src/dependency/model.ts
 import { exec as exec2 } from "child_process";
 import { promisify as promisify2 } from "util";
-import * as path2 from "path";
 import * as fs2 from "fs/promises";
 import { existsSync as existsSync2 } from "fs";
 var execAsync2 = promisify2(exec2);
@@ -850,12 +866,7 @@ async function downloadModel(url, output) {
     const { repoId, type, filePath } = parseHuggingFaceUrl(url);
     console.log(`\uD83D\uDCE5 Downloading from ${url}...`);
     console.log(`\uD83D\uDCC2 Output directory: ${output}`);
-    let targetPath;
-    if (type === "file" && filePath) {
-      targetPath = path2.join(output, path2.basename(filePath));
-    } else {
-      targetPath = output;
-    }
+    let targetPath = output;
     const alreadyExists = await checkExistingDownload(targetPath, type);
     if (alreadyExists) {
       console.log(`\u2705 Already exists: ${targetPath}`);
@@ -865,20 +876,30 @@ async function downloadModel(url, output) {
         message: `File already exists at ${targetPath}`
       };
     }
+    const cacheDir = process.env.HF_HOME || process.env.HF_HUB_CACHE || "~/.cache/huggingface";
+    console.log(`\uD83D\uDCBE Using cache directory: ${cacheDir}`);
     await fs2.mkdir(output, { recursive: true });
     let command;
     if (type === "file" && filePath) {
-      command = `hf download ${repoId} ${filePath} --local-dir "${output}"`;
+      command = `hf download ${repoId} ${filePath} --local-dir "${output}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCC4 Downloading file: ${filePath}`);
     } else if (type === "folder" && filePath) {
-      command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${output}"`;
+      command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${output}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCC1 Downloading folder: ${filePath}`);
     } else {
-      command = `hf download ${repoId} --local-dir "${output}"`;
+      command = `hf download ${repoId} --local-dir "${output}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCE6 Downloading repository: ${repoId}`);
     }
     console.log(`\uD83D\uDD04 Executing: ${command}`);
-    const { stdout, stderr } = await execAsync2(command);
+    const execOptions = {
+      env: {
+        ...process.env,
+        HF_HUB_CACHE: cacheDir,
+        HF_HUB_OFFLINE: "0",
+        HF_HUB_DISABLE_SYMLINKS: "0"
+      }
+    };
+    const { stdout, stderr } = await execAsync2(command, execOptions);
     if (stderr && !stderr.includes("warning") && !stderr.includes("already exists") && !stderr.includes("Fetching") && !stderr.includes("100%")) {
       console.warn(`\u26A0\uFE0F  Warning: ${stderr}`);
     }
@@ -1689,9 +1710,9 @@ function resolveFriendlyClientOptions(options) {
   };
 }
 function createORPCClient(link, options = {}) {
-  const path3 = options.path ?? [];
+  const path2 = options.path ?? [];
   const procedureClient = async (...[input, options2 = {}]) => {
-    return await link.call(path3, input, resolveFriendlyClientOptions(options2));
+    return await link.call(path2, input, resolveFriendlyClientOptions(options2));
   };
   const recursive = new Proxy(procedureClient, {
     get(target, key) {
@@ -1700,7 +1721,7 @@ function createORPCClient(link, options = {}) {
       }
       return createORPCClient(link, {
         ...options,
-        path: [...path3, key]
+        path: [...path2, key]
       });
     }
   });
@@ -1987,14 +2008,14 @@ class StandardLink {
   }
   interceptors;
   clientInterceptors;
-  call(path3, input, options) {
-    return runWithSpan({ name: `${ORPC_NAME}.${path3.join("/")}`, signal: options.signal }, (span) => {
+  call(path2, input, options) {
+    return runWithSpan({ name: `${ORPC_NAME}.${path2.join("/")}`, signal: options.signal }, (span) => {
       span?.setAttribute("rpc.system", ORPC_NAME);
-      span?.setAttribute("rpc.method", path3.join("."));
+      span?.setAttribute("rpc.method", path2.join("."));
       if (isAsyncIteratorObject(input)) {
         input = asyncIteratorWithSpan({ name: "consume_event_iterator_input", signal: options.signal }, input);
       }
-      return intercept(this.interceptors, { ...options, path: path3, input }, async ({ path: path22, input: input2, ...options2 }) => {
+      return intercept(this.interceptors, { ...options, path: path2, input }, async ({ path: path22, input: input2, ...options2 }) => {
         const otelConfig = getGlobalOtelConfig();
         let otelContext;
         const currentSpan = otelConfig?.trace.getActiveSpan() ?? span;
@@ -2002,8 +2023,8 @@ class StandardLink {
           otelContext = otelConfig?.trace.setSpan(otelConfig.context.active(), currentSpan);
         }
         const request = await runWithSpan({ name: "encode_request", context: otelContext }, () => this.codec.encode(path22, input2, options2));
-        const response = await intercept(this.clientInterceptors, { ...options2, input: input2, path: path22, request }, ({ input: input3, path: path32, request: request2, ...options3 }) => {
-          return runWithSpan({ name: "send_request", signal: options3.signal, context: otelContext }, () => this.sender.call(request2, options3, path32, input3));
+        const response = await intercept(this.clientInterceptors, { ...options2, input: input2, path: path22, request }, ({ input: input3, path: path3, request: request2, ...options3 }) => {
+          return runWithSpan({ name: "send_request", signal: options3.signal, context: otelContext }, () => this.sender.call(request2, options3, path3, input3));
         });
         const output = await runWithSpan({ name: "decode_response", context: otelContext }, () => this.codec.decode(response, options2, path22, input2));
         if (isAsyncIteratorObject(output)) {
@@ -2160,8 +2181,8 @@ class StandardRPCJsonSerializer {
     return ref.data;
   }
 }
-function toHttpPath(path3) {
-  return `/${path3.map(encodeURIComponent).join("/")}`;
+function toHttpPath(path2) {
+  return `/${path2.map(encodeURIComponent).join("/")}`;
 }
 function toStandardHeaders2(headers) {
   if (typeof headers.forEach === "function") {
@@ -2187,18 +2208,18 @@ class StandardRPCLinkCodec {
   fallbackMethod;
   expectedMethod;
   headers;
-  async encode(path3, input, options) {
-    let headers = toStandardHeaders2(await value(this.headers, options, path3, input));
+  async encode(path2, input, options) {
+    let headers = toStandardHeaders2(await value(this.headers, options, path2, input));
     if (options.lastEventId !== undefined) {
       headers = mergeStandardHeaders(headers, { "last-event-id": options.lastEventId });
     }
-    const expectedMethod = await value(this.expectedMethod, options, path3, input);
-    const baseUrl = await value(this.baseUrl, options, path3, input);
+    const expectedMethod = await value(this.expectedMethod, options, path2, input);
+    const baseUrl = await value(this.baseUrl, options, path2, input);
     const url = new URL(baseUrl);
-    url.pathname = `${url.pathname.replace(/\/$/, "")}${toHttpPath(path3)}`;
+    url.pathname = `${url.pathname.replace(/\/$/, "")}${toHttpPath(path2)}`;
     const serialized = this.serializer.serialize(input);
     if (expectedMethod === "GET" && !(serialized instanceof FormData) && !isAsyncIteratorObject(serialized)) {
-      const maxUrlLength = await value(this.maxUrlLength, options, path3, input);
+      const maxUrlLength = await value(this.maxUrlLength, options, path2, input);
       const getUrl = new URL(url);
       getUrl.searchParams.append("data", stringifyJSON(serialized));
       if (getUrl.toString().length <= maxUrlLength) {
@@ -2347,9 +2368,9 @@ class LinkFetchClient {
     this.toFetchRequestOptions = options;
     this.adapterInterceptors = toArray(options.adapterInterceptors);
   }
-  async call(standardRequest, options, path3, input) {
+  async call(standardRequest, options, path2, input) {
     const request = toFetchRequest(standardRequest, this.toFetchRequestOptions);
-    const fetchResponse = await intercept(this.adapterInterceptors, { ...options, request, path: path3, input, init: { redirect: "manual" } }, ({ request: request2, path: path22, input: input2, init, ...options2 }) => this.fetch(request2, init, options2, path22, input2));
+    const fetchResponse = await intercept(this.adapterInterceptors, { ...options, request, path: path2, input, init: { redirect: "manual" } }, ({ request: request2, path: path22, input: input2, init, ...options2 }) => this.fetch(request2, init, options2, path22, input2));
     const lazyResponse = toStandardLazyResponse(fetchResponse, { signal: request.signal });
     return lazyResponse;
   }
@@ -2379,9 +2400,10 @@ var api = createORPCClient(link);
 
 // src/dependency/index.ts
 var syncDependencies = async (dependencies) => {
+  console.log("Syncing dependencies");
+  console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
   const customNodes = dependencies.filter((d) => d.type === "custom_node");
   const models = dependencies.filter((d) => d.type === "model");
-  console.log(customNodes, models);
   const nodePromises = customNodes.map(async (node) => {
     const resp = await syncNode(node.url);
     return { id: node.id, type: "custom_node", success: resp.success, message: resp.message };
@@ -2391,8 +2413,10 @@ var syncDependencies = async (dependencies) => {
     return { id: model.id, type: "model", success: resp.success, message: resp.message };
   });
   const results = await Promise.all([...nodePromises, ...modelPromises]);
-  console.log(results);
-  await api.client.updateDependencies(results);
+  const successResult = results.filter((r) => r.success);
+  console.log("Successfully synced dependencies:");
+  console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
+  await api.client.updateDependencies(successResult);
 };
 
 // src/lib/db.ts
@@ -2417,37 +2441,998 @@ db.run(`
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`);
+var updateTask = (id, obj) => {
+  const fields = [];
+  const values = [];
+  const placeholders = [];
+  Object.entries(obj).forEach(([key, value2]) => {
+    if (value2 !== undefined) {
+      fields.push(key);
+      values.push(value2);
+      placeholders.push(`?`);
+    }
+  });
+  if (fields.length === 0)
+    return;
+  fields.push("updated_at");
+  values.push("CURRENT_TIMESTAMP");
+  const updateFields = fields.map((field) => `${field} = ?`).join(", ");
+  const updateResult = db.run(`UPDATE prompts SET ${updateFields} WHERE id = ?`, [...values, id]);
+  if (updateResult.changes === 0) {
+    fields.push("id");
+    values.push(id);
+    placeholders.push("?");
+    const insertFields = fields.join(", ");
+    const insertPlaceholders = placeholders.join(", ");
+    db.run(`INSERT INTO prompts (${insertFields}) VALUES (${insertPlaceholders})`, values);
+  }
+};
 var getTask = (id) => {
-  return db.query("SELECT * FROM prompts WHERE id = ?").get(id);
+  let task = db.query("SELECT * FROM tasks WHERE id = ?").get(id);
+  if (!task) {
+    db.run(`INSERT INTO tasks (id) VALUES (?)`, [id]);
+    task = { id };
+  }
+  return task;
+};
+var updatePromptId = (id, prompt_id) => {
+  const task = getTask(id);
+  if (task.prompt_id)
+    return false;
+  updateTask(id, { prompt_id });
+  return true;
 };
 
 // src/task/status.ts
-var syncStatus = async (id) => {
-  const status = await getTask(id);
-  if (!status) {
+var syncTaskStatus = async (id) => {
+  const task = await getTask(id);
+  if (!task) {
     console.log("task not found", id);
     return;
   }
-  if (status.files) {
-    const files = JSON.parse(status.files);
+  if (!task.prompt_id) {
+    console.log("task not queued", id);
+    return;
+  }
+  if (task.files) {
+    const files = JSON.parse(task.files);
   }
   await api.client.updateTask({
     id,
-    data: status
+    data: task
   });
 };
 
-// src/task/index.ts
-var syncTask = async (id) => {
-  const task = getTask(id);
-  if (task?.prompt_id)
-    return syncStatus(task.prompt_id);
+// src/task/queue.ts
+import path2 from "path";
+import crypto from "crypto";
+import fs3 from "fs/promises";
+
+// node_modules/@saintno/comfyui-sdk/build/index.esm.js
+import u from "ws";
+var O;
+if (typeof window < "u" && window.WebSocket)
+  O = window.WebSocket;
+else
+  O = u;
+
+class R {
+  socket;
+  webSocketImpl;
+  constructor(_, Z = {}) {
+    let { headers: $, customWebSocketImpl: J } = Z;
+    this.webSocketImpl = J || O;
+    try {
+      if (typeof window < "u" && window.WebSocket)
+        this.socket = new this.webSocketImpl(_);
+      else {
+        let z = this.webSocketImpl;
+        this.socket = new z(_, { headers: $ });
+      }
+    } catch (z) {
+      throw console.error("WebSocket initialization failed:", z), Error(`WebSocket initialization failed: ${z instanceof Error ? z.message : String(z)}`);
+    }
+    return this;
+  }
+  get client() {
+    return this.socket;
+  }
+  send(_) {
+    if (this.socket && this.socket.readyState === this.webSocketImpl.OPEN)
+      this.socket.send(_);
+    else
+      console.error("WebSocket is not open or available");
+  }
+  close() {
+    if (this.socket)
+      this.socket.close();
+  }
+}
+var M = "CheckpointLoaderSimple";
+var N = "LoraLoader";
+var P = "KSampler";
+var F = (_) => new Promise((Z) => setTimeout(Z, _));
+class A extends EventTarget {
+  client;
+  supported = false;
+  constructor(_) {
+    super();
+    this.client = _;
+  }
+  get isSupported() {
+    return this.supported;
+  }
+  on(_, Z, $) {
+    return this.addEventListener(_, Z, $), () => this.off(_, Z);
+  }
+  off(_, Z, $) {
+    this.removeEventListener(_, Z, $);
+  }
+}
+
+class E extends A {
+  async checkSupported() {
+    if (await this.getVersion().catch(() => false) !== false)
+      this.supported = true;
+    return this.supported;
+  }
+  destroy() {
+    this.supported = false;
+  }
+  async fetchApi(_, Z) {
+    if (!this.supported)
+      return false;
+    return this.client.fetchApi(_, Z);
+  }
+  async defaultUi(_) {
+    return true;
+  }
+  async getVersion() {
+    let Z = await this.client.fetchApi("/manager/version");
+    if (Z && Z.ok)
+      return Z.text();
+    throw Error("Failed to get version", { cause: Z });
+  }
+  async getNodeMapList(_ = "local") {
+    let Z = [], $ = await this.fetchApi(`/customnode/getmappings?mode=${_}`);
+    if ($ && $.ok) {
+      let J = await $.json();
+      for (let z in J) {
+        let [G, Y] = J[z];
+        Z.push({ url: z, nodeNames: G, title_aux: Y.title_aux, title: Y.title, author: Y.author, nickname: Y.nickname, description: Y.description });
+      }
+      return Z;
+    }
+    throw Error("Failed to get node map list", { cause: $ });
+  }
+  async checkExtensionUpdate(_ = "local") {
+    let Z = await this.fetchApi(`/customnode/fetch_updates?mode=${_}`);
+    if (Z && Z.ok) {
+      if (Z.status === 201)
+        return 1;
+      return 0;
+    }
+    return 2;
+  }
+  async updataAllExtensions(_ = "local") {
+    let Z = await this.fetchApi(`/customnode/update_all?mode=${_}`);
+    if (Z && Z.ok) {
+      if (Z.status === 200)
+        return { type: 0 };
+      return { type: 1, data: await Z.json() };
+    }
+    return { type: 2 };
+  }
+  async updateComfyUI() {
+    let _ = await this.fetchApi("/comfyui_manager/update_comfyui");
+    if (_)
+      switch (_.status) {
+        case 200:
+          return 0;
+        case 201:
+          return 1;
+        default:
+          return 2;
+      }
+    return 2;
+  }
+  async getExtensionList(_ = "local", Z = true) {
+    let $ = await this.fetchApi(`/customnode/getlist?mode=${_}&skip_update=${Z}`);
+    if ($ && $.ok)
+      return $.json();
+    throw Error("Failed to get extension list", { cause: $ });
+  }
+  async rebootInstance() {
+    if (await this.fetchApi("/manager/reboot").catch((Z) => {
+      return true;
+    }) !== true)
+      return false;
+    return true;
+  }
+  async previewMethod(_) {
+    let Z = "/manager/preview_method";
+    if (_)
+      Z += `?value=${_}`;
+    let $ = await this.fetchApi(Z);
+    if ($ && $.ok) {
+      let J = await $.text();
+      if (!J)
+        return _;
+      return J;
+    }
+    throw Error("Failed to set preview method", { cause: $ });
+  }
+  async installExtension(_) {
+    let Z = await this.fetchApi("/customnode/install", { method: "POST", body: JSON.stringify(_) });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to install extension", { cause: Z });
+  }
+  async fixInstallExtension(_) {
+    let Z = await this.fetchApi("/customnode/fix", { method: "POST", body: JSON.stringify(_) });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to fix extension installation", { cause: Z });
+  }
+  async installExtensionFromGit(_) {
+    let Z = await this.fetchApi("/customnode/install/git_url", { method: "POST", body: _ });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to install extension from git", { cause: Z });
+  }
+  async installPipPackages(_) {
+    let Z = await this.fetchApi("/customnode/install/pip", { method: "POST", body: _.join(" ") });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to install pip's packages", { cause: Z });
+  }
+  async uninstallExtension(_) {
+    let Z = await this.fetchApi("/customnode/uninstall", { method: "POST", body: JSON.stringify(_) });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to uninstall extension", { cause: Z });
+  }
+  async updateExtension(_) {
+    let Z = await this.fetchApi("/customnode/update", { method: "POST", body: JSON.stringify(_) });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to update extension", { cause: Z });
+  }
+  async setActiveExtension(_) {
+    let Z = await this.fetchApi("/customnode/toggle_active", { method: "POST", body: JSON.stringify(_) });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to set active extension", { cause: Z });
+  }
+  async installModel(_) {
+    let Z = await this.fetchApi("/model/install", { method: "POST", body: JSON.stringify(_) });
+    if (Z && Z.ok)
+      return true;
+    throw Error("Failed to install model", { cause: Z });
+  }
+}
+var c = encodeURIComponent("Primitive boolean [Crystools]");
+
+class w extends A {
+  resources;
+  listeners = [];
+  binded = false;
+  async checkSupported() {
+    if (await this.client.getNodeDefs(c))
+      this.supported = true, this.bind();
+    return this.supported;
+  }
+  destroy() {
+    this.listeners.forEach((_) => {
+      this.off(_.event, _.handler, _.options);
+    }), this.listeners = [];
+  }
+  async fetchApi(_, Z) {
+    if (!this.supported)
+      return false;
+    return this.client.fetchApi(_, Z);
+  }
+  on(_, Z, $) {
+    return this.addEventListener(_, Z, $), this.listeners.push({ event: _, options: $, handler: Z }), () => this.off(_, Z);
+  }
+  off(_, Z, $) {
+    this.removeEventListener(_, Z, $), this.listeners = this.listeners.filter((J) => J.event !== _ && J.handler !== Z);
+  }
+  get monitorData() {
+    if (!this.supported)
+      return false;
+    return this.resources;
+  }
+  async setConfig(_) {
+    if (!this.supported)
+      return false;
+    return this.fetchApi("/api/crystools/monitor", { method: "PATCH", body: JSON.stringify(_) });
+  }
+  async switch(_) {
+    if (!this.supported)
+      return false;
+    return this.fetchApi("/api/crystools/monitor/switch", { method: "POST", body: JSON.stringify({ monitor: _ }) });
+  }
+  async getHddList() {
+    if (!this.supported)
+      return null;
+    let _ = await this.fetchApi("/api/crystools/monitor/HDD");
+    if (_)
+      return _.json();
+    return null;
+  }
+  async getGpuList() {
+    if (!this.supported)
+      return null;
+    let _ = await this.fetchApi("/api/crystools/monitor/GPU");
+    if (_)
+      return _.json();
+    return null;
+  }
+  async setGpuConfig(_, Z) {
+    if (!this.supported)
+      return false;
+    return this.fetchApi(`/api/crystools/monitor/GPU/${_}`, { method: "PATCH", body: JSON.stringify(Z) });
+  }
+  bind() {
+    if (this.binded)
+      return;
+    else
+      this.binded = true;
+    this.client.on("all", (_) => {
+      let Z = _.detail;
+      if (Z.type === "crystools.monitor")
+        this.resources = Z.data, this.dispatchEvent(new CustomEvent("system_monitor", { detail: Z.data }));
+    });
+  }
+}
+
+class x extends EventTarget {
+  apiHost;
+  osType;
+  isReady = false;
+  listenTerminal = false;
+  lastActivity = Date.now();
+  wsTimeout = 1e4;
+  wsTimer = null;
+  _pollingTimer = null;
+  apiBase;
+  clientId;
+  socket = null;
+  customWsImpl = null;
+  listeners = [];
+  credentials = null;
+  ext = { manager: new E(this), monitor: new w(this) };
+  static generateId() {
+    return "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx".replace(/[xy]/g, function(_) {
+      let Z = Math.random() * 16 | 0;
+      return (_ === "x" ? Z : Z & 3 | 8).toString(16);
+    });
+  }
+  on(_, Z, $) {
+    return this.log("on", "Add listener", { type: _, callback: Z, options: $ }), this.addEventListener(_, Z, $), this.listeners.push({ event: _, handler: Z, options: $ }), () => this.off(_, Z, $);
+  }
+  off(_, Z, $) {
+    this.log("off", "Remove listener", { type: _, callback: Z, options: $ }), this.listeners = this.listeners.filter((J) => J.event !== _ && J.handler !== Z), this.removeEventListener(_, Z, $);
+  }
+  removeAllListeners() {
+    this.log("removeAllListeners", "Triggered"), this.listeners.forEach((_) => {
+      this.removeEventListener(_.event, _.handler, _.options);
+    }), this.listeners = [];
+  }
+  get id() {
+    return this.clientId ?? this.apiBase;
+  }
+  get availableFeatures() {
+    return Object.keys(this.ext).reduce((_, Z) => ({ ..._, [Z]: this.ext[Z].isSupported }), {});
+  }
+  constructor(_, Z = x.generateId(), $) {
+    super();
+    if (this.apiHost = _, this.apiBase = _.split("://")[1], this.clientId = Z, $?.credentials)
+      this.credentials = $?.credentials, this.testCredentials();
+    if ($?.wsTimeout)
+      this.wsTimeout = $.wsTimeout;
+    if ($?.listenTerminal)
+      this.listenTerminal = $.listenTerminal;
+    if ($?.customWebSocketImpl)
+      this.customWsImpl = $.customWebSocketImpl;
+    return this.log("constructor", "Initialized", { host: _, clientId: Z, opts: $ }), this;
+  }
+  destroy() {
+    if (this.log("destroy", "Destroying client..."), this.wsTimer)
+      clearInterval(this.wsTimer);
+    if (this._pollingTimer)
+      clearInterval(this._pollingTimer), this._pollingTimer = null;
+    if (this.socket?.client)
+      this.socket.client.onclose = null, this.socket.client.onerror = null, this.socket.client.onmessage = null, this.socket.client.onopen = null, this.socket.client.close();
+    for (let _ in this.ext)
+      this.ext[_].destroy();
+    this.socket?.close(), this.log("destroy", "Client destroyed"), this.removeAllListeners();
+  }
+  log(_, Z, $) {
+    this.dispatchEvent(new CustomEvent("log", { detail: { fnName: _, message: Z, data: $ } }));
+  }
+  apiURL(_) {
+    return `${this.apiHost}${_}`;
+  }
+  getCredentialHeaders() {
+    if (!this.credentials)
+      return {};
+    switch (this.credentials?.type) {
+      case "basic":
+        return { Authorization: `Basic ${btoa(`${this.credentials.username}:${this.credentials.password}`)}` };
+      case "bearer_token":
+        return { Authorization: `Bearer ${this.credentials.token}` };
+      case "custom":
+        return this.credentials.headers;
+      default:
+        return {};
+    }
+  }
+  async testCredentials() {
+    try {
+      if (!this.credentials)
+        return false;
+      return await this.pollStatus(2000), this.dispatchEvent(new CustomEvent("auth_success")), true;
+    } catch (_) {
+      if (this.log("testCredentials", "Failed", _), _ instanceof Response) {
+        if (_.status === 401) {
+          this.dispatchEvent(new CustomEvent("auth_error", { detail: _ }));
+          return;
+        }
+      }
+      return this.dispatchEvent(new CustomEvent("connection_error", { detail: _ })), false;
+    }
+  }
+  async testFeatures() {
+    let _ = Object.values(this.ext);
+    await Promise.all(_.map((Z) => Z.checkSupported())), this.isReady = true;
+  }
+  async fetchApi(_, Z) {
+    if (!Z)
+      Z = {};
+    return Z.headers = { ...this.getCredentialHeaders() }, Z.mode = "cors", fetch(this.apiURL(_), Z);
+  }
+  async pollStatus(_ = 1000) {
+    let Z = new AbortController, $ = setTimeout(() => Z.abort(), _);
+    try {
+      let J = await this.fetchApi("/prompt", { signal: Z.signal });
+      if (J.status === 200)
+        return J.json();
+      else
+        throw J;
+    } catch (J) {
+      if (this.log("pollStatus", "Failed", J), J.name === "AbortError")
+        throw Error("Request timed out");
+      throw J;
+    } finally {
+      clearTimeout($);
+    }
+  }
+  async queuePrompt(_, Z) {
+    let $ = { client_id: this.clientId, prompt: Z };
+    if (_ !== null) {
+      if (_ === -1)
+        $.front = true;
+      else if (_ !== 0)
+        $.number = _;
+    }
+    try {
+      let J = await this.fetchApi("/prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify($) });
+      if (J.status !== 200)
+        throw { response: J };
+      return J.json();
+    } catch (J) {
+      throw this.log("queuePrompt", "Can't queue prompt", J), J.response;
+    }
+  }
+  async appendPrompt(_) {
+    return this.queuePrompt(null, _).catch((Z) => {
+      throw this.dispatchEvent(new CustomEvent("queue_error")), Z;
+    });
+  }
+  async getQueue() {
+    return (await this.fetchApi("/queue")).json();
+  }
+  async getHistories(_ = 200) {
+    return (await this.fetchApi(`/history?max_items=${_}`)).json();
+  }
+  async getHistory(_) {
+    return (await (await this.fetchApi(`/history/${_}`)).json())[_];
+  }
+  async getSystemStats() {
+    return (await this.fetchApi("/system_stats")).json();
+  }
+  async getTerminalLogs() {
+    return (await this.fetchApi("/internal/logs/raw")).json();
+  }
+  async setTerminalSubscription(_) {
+    this.listenTerminal = _, await this.fetchApi("/internal/logs/subscribe", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ clientId: this.clientId, enabled: _ }) });
+  }
+  async getExtensions() {
+    return (await this.fetchApi("/extensions")).json();
+  }
+  async getEmbeddings() {
+    return (await this.fetchApi("/embeddings")).json();
+  }
+  async getCheckpoints() {
+    let _ = await this.getNodeDefs(M);
+    if (!_)
+      return [];
+    let Z = _[M].input.required?.ckpt_name?.[0];
+    if (!Z)
+      return [];
+    return Z;
+  }
+  async getLoras() {
+    let _ = await this.getNodeDefs(N);
+    if (!_)
+      return [];
+    let Z = _[N].input.required?.lora_name?.[0];
+    if (!Z)
+      return [];
+    return Z;
+  }
+  async getSamplerInfo() {
+    let _ = await this.getNodeDefs(P);
+    if (!_)
+      return {};
+    return { sampler: _[P].input.required.sampler_name ?? [], scheduler: _[P].input.required.scheduler ?? [] };
+  }
+  async getNodeDefs(_) {
+    let $ = await (await this.fetchApi(`/object_info${_ ? `/${_}` : ""}`)).json();
+    if (Object.keys($).length === 0)
+      return null;
+    return $;
+  }
+  async getUserConfig() {
+    return (await this.fetchApi("/users")).json();
+  }
+  async createUser(_) {
+    return await this.fetchApi("/users", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: _ }) });
+  }
+  async getSettings() {
+    return (await this.fetchApi("/settings")).json();
+  }
+  async getSetting(_) {
+    return (await this.fetchApi(`/settings/${encodeURIComponent(_)}`)).json();
+  }
+  async storeSettings(_) {
+    await this.fetchApi("/settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(_) });
+  }
+  async storeSetting(_, Z) {
+    await this.fetchApi(`/settings/${encodeURIComponent(_)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(Z) });
+  }
+  async uploadImage(_, Z, $) {
+    let J = new FormData;
+    if (_ instanceof ArrayBuffer || _ instanceof Uint8Array)
+      J.append("image", new Blob([_]), Z);
+    else
+      J.append("image", _, Z);
+    J.append("subfolder", $?.subfolder ?? ""), J.append("overwrite", $?.override?.toString() ?? "false");
+    try {
+      let z = await this.fetchApi("/upload/image", { method: "POST", body: J }), G = await z.json(), Y = { ...G, filename: G.name };
+      if (!z.ok)
+        return this.log("uploadImage", "Upload failed", z), false;
+      return { info: Y, url: this.getPathImage(Y) };
+    } catch (z) {
+      return this.log("uploadImage", "Upload failed", z), false;
+    }
+  }
+  async uploadMask(_, Z) {
+    let $ = new FormData;
+    if (_ instanceof ArrayBuffer || _ instanceof Uint8Array)
+      $.append("image", new Blob([_]), "mask.png");
+    else
+      $.append("image", _, "mask.png");
+    $.append("original_ref", JSON.stringify(Z));
+    try {
+      let J = await this.fetchApi("/upload/mask", { method: "POST", body: $ });
+      if (!J.ok)
+        return this.log("uploadMask", "Upload failed", J), false;
+      let z = await J.json(), G = { ...z, filename: z.name };
+      return { info: G, url: this.getPathImage(G) };
+    } catch (J) {
+      return this.log("uploadMask", "Upload failed", J), false;
+    }
+  }
+  async freeMemory(_, Z) {
+    let $ = { unload_models: _, free_memory: Z };
+    try {
+      let J = await this.fetchApi("/free", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify($) });
+      if (!J.ok)
+        return this.log("freeMemory", "Free memory failed", J), false;
+      return true;
+    } catch (J) {
+      return this.log("freeMemory", "Free memory failed", J), false;
+    }
+  }
+  getPathImage(_) {
+    return this.apiURL(`/view?filename=${_.filename}&type=${_.type}&subfolder=${_.subfolder ?? ""}`);
+  }
+  async getImage(_) {
+    return this.fetchApi(`/view?filename=${_.filename}&type=${_.type}&subfolder=${_.subfolder ?? ""}`).then((Z) => Z.blob());
+  }
+  async getUserData(_) {
+    return this.fetchApi(`/userdata/${encodeURIComponent(_)}`);
+  }
+  async storeUserData(_, Z, $ = { overwrite: true, stringify: true, throwOnError: true }) {
+    let J = await this.fetchApi(`/userdata/${encodeURIComponent(_)}?overwrite=${$.overwrite}`, { method: "POST", headers: { "Content-Type": $.stringify ? "application/json" : "application/octet-stream" }, body: $.stringify ? JSON.stringify(Z) : Z, ...$ });
+    if (J.status !== 200 && $.throwOnError !== false)
+      throw this.log("storeUserData", "Error storing user data file", J), Error(`Error storing user data file '${_}': ${J.status} ${J.statusText}`);
+    return J;
+  }
+  async deleteUserData(_) {
+    let Z = await this.fetchApi(`/userdata/${encodeURIComponent(_)}`, { method: "DELETE" });
+    if (Z.status !== 204)
+      throw this.log("deleteUserData", "Error deleting user data file", Z), Error(`Error removing user data file '${_}': ${Z.status} ${Z.statusText}`);
+  }
+  async moveUserData(_, Z, $ = { overwrite: false }) {
+    return this.fetchApi(`/userdata/${encodeURIComponent(_)}/move/${encodeURIComponent(Z)}?overwrite=${$.overwrite}`, { method: "POST" });
+  }
+  async listUserData(_, Z, $) {
+    let J = await this.fetchApi(`/userdata?${new URLSearchParams({ dir: _, recurse: Z?.toString() ?? "", split: $?.toString() ?? "" })}`);
+    if (J.status === 404)
+      return [];
+    if (J.status !== 200)
+      throw this.log("listUserData", "Error getting user data list", J), Error(`Error getting user data list '${_}': ${J.status} ${J.statusText}`);
+    return J.json();
+  }
+  async interrupt() {
+    await this.fetchApi("/interrupt", { method: "POST" });
+  }
+  init(_ = 10, Z = 1000) {
+    return this.pingSuccess(_, Z).then(() => {
+      this.pullOsType(), this.testFeatures(), this.createSocket(), this.setTerminalSubscription(this.listenTerminal);
+    }).catch(($) => {
+      this.log("init", "Failed", $), this.dispatchEvent(new CustomEvent("connection_error", { detail: $ }));
+    }), this;
+  }
+  async pingSuccess(_ = 10, Z = 1000) {
+    let $ = 0, J = await this.ping();
+    while (!J.status) {
+      if ($ > _)
+        throw Error("Can't connect to the server");
+      await F(Z), J = await this.ping(), $++;
+    }
+  }
+  async waitForReady() {
+    while (!this.isReady)
+      await F(100);
+    return this;
+  }
+  async pullOsType() {
+    this.getSystemStats().then((_) => {
+      this.osType = _.system.os;
+    });
+  }
+  async ping() {
+    let _ = performance.now();
+    return this.pollStatus(5000).then(() => {
+      return { status: true, time: performance.now() - _ };
+    }).catch((Z) => {
+      return this.log("ping", "Can't connect to the server", Z), { status: false };
+    });
+  }
+  async reconnectWs(_) {
+    if (_)
+      this.dispatchEvent(new CustomEvent("disconnected")), this.dispatchEvent(new CustomEvent("reconnecting"));
+    let Z = 10, $ = 1000, J = 15000, z = 0, G = () => {
+      if (z++, this.log("socket", `WebSocket reconnection attempt #${z}`), this.socket?.client)
+        try {
+          this.socket.close();
+        } catch (Y) {
+          this.log("socket", "Error while closing previous socket", Y);
+        }
+      this.socket = null;
+      try {
+        this.createSocket(true);
+      } catch (Y) {
+        this.log("socket", "Error creating socket during reconnect", Y);
+      }
+      if (z < Z) {
+        let Y = Math.min($ * Math.pow(2, z - 1), J), H = Y * 0.3 * (Math.random() - 0.5), q = Math.max(1000, Y + H);
+        this.log("socket", `Will retry in ${Math.round(q / 1000)} seconds`), setTimeout(() => {
+          if (!this.socket?.client || this.socket.client.readyState !== WebSocket.OPEN && this.socket.client.readyState !== WebSocket.CONNECTING)
+            this.log("socket", "Reconnection failed or timed out, retrying..."), G();
+          else
+            this.log("socket", "Reconnection successful");
+        }, q);
+      } else
+        this.log("socket", `Maximum reconnection attempts (${Z}) reached.`), this.dispatchEvent(new CustomEvent("reconnection_failed"));
+    };
+    G();
+  }
+  resetLastActivity() {
+    this.lastActivity = Date.now();
+  }
+  createSocket(_ = false) {
+    let Z = false, $ = false;
+    if (this.socket) {
+      this.log("socket", "Socket already exists, skipping creation.");
+      return;
+    }
+    let J = { ...this.getCredentialHeaders() }, z = `?clientId=${this.clientId}`, G = `ws${this.apiHost.includes("https:") ? "s" : ""}://${this.apiBase}/ws${z}`;
+    try {
+      this.socket = new R(G, { headers: J, customWebSocketImpl: this.customWsImpl }), this.socket.client.onclose = () => {
+        if (Z || _)
+          return;
+        Z = true, this.log("socket", "Socket closed -> Reconnecting"), this.reconnectWs(true);
+      }, this.socket.client.onopen = () => {
+        if (this.resetLastActivity(), Z = false, $ = false, this.log("socket", "Socket opened"), _)
+          this.dispatchEvent(new CustomEvent("reconnected"));
+        else
+          this.dispatchEvent(new CustomEvent("connected"));
+      };
+    } catch (Y) {
+      this.log("socket", "WebSocket creation failed, falling back to polling", Y), this.socket = null, $ = true, this.dispatchEvent(new CustomEvent("websocket_unavailable", { detail: Y })), this.setupPollingFallback();
+    }
+    if (this.socket?.client) {
+      if (this.socket.client.onmessage = (Y) => {
+        this.resetLastActivity();
+        try {
+          if (Y.data instanceof ArrayBuffer) {
+            let H = Y.data, q = new DataView(H), Q = q.getUint32(0);
+            switch (Q) {
+              case 1:
+                let V = q.getUint32(0), B;
+                switch (V) {
+                  case 1:
+                  default:
+                    B = "image/jpeg";
+                    break;
+                  case 2:
+                    B = "image/png";
+                }
+                let K = new Blob([H.slice(8)], { type: B });
+                this.dispatchEvent(new CustomEvent("b_preview", { detail: K }));
+                break;
+              default:
+                throw Error(`Unknown binary websocket message of type ${Q}`);
+            }
+          } else if (typeof Y.data === "string") {
+            let H = JSON.parse(Y.data);
+            if (!H.data || !H.type)
+              return;
+            if (this.dispatchEvent(new CustomEvent("all", { detail: H })), H.type === "logs")
+              this.dispatchEvent(new CustomEvent("terminal", { detail: H.data.entries?.[0] || null }));
+            else
+              this.dispatchEvent(new CustomEvent(H.type, { detail: H.data }));
+            if (H.data.sid)
+              this.clientId = H.data.sid;
+          } else
+            this.log("socket", "Unhandled message", Y);
+        } catch (H) {
+          this.log("socket", "Unhandled message", { event: Y, error: H });
+        }
+      }, this.socket.client.onerror = (Y) => {
+        if (this.log("socket", "Socket error", Y), !Z && !$)
+          $ = true, this.log("socket", "WebSocket error, will try polling as fallback"), this.setupPollingFallback();
+      }, !_)
+        this.wsTimer = setInterval(() => {
+          if (Z)
+            return;
+          if (Date.now() - this.lastActivity > this.wsTimeout)
+            Z = true, this.log("socket", "Connection timed out, reconnecting..."), this.reconnectWs(true);
+        }, this.wsTimeout / 2);
+    }
+  }
+  setupPollingFallback() {
+    if (this.log("socket", "Setting up polling fallback mechanism"), this._pollingTimer)
+      try {
+        clearInterval(this._pollingTimer), this._pollingTimer = null;
+      } catch ($) {
+        this.log("socket", "Error clearing polling timer", $);
+      }
+    let _ = 2000, Z = async () => {
+      try {
+        let $ = await this.pollStatus();
+        if (this.dispatchEvent(new CustomEvent("status", { detail: $ })), this.resetLastActivity(), !this.socket || !this.socket.client || this.socket.client.readyState !== WebSocket.OPEN) {
+          this.log("socket", "Attempting to restore WebSocket connection");
+          try {
+            this.createSocket(true);
+          } catch (J) {
+            this.log("socket", "WebSocket still unavailable, continuing with polling", J);
+          }
+        } else if (this.log("socket", "WebSocket connection restored, stopping polling"), this._pollingTimer)
+          clearInterval(this._pollingTimer), this._pollingTimer = null;
+      } catch ($) {
+        this.log("socket", "Polling error", $);
+      }
+    };
+    this._pollingTimer = setInterval(Z, _), this.log("socket", `Polling started with interval of ${_}ms`);
+  }
+  async getModelFolders() {
+    try {
+      let _ = await this.fetchApi("/experiment/models");
+      if (!_.ok)
+        throw this.log("getModelFolders", "Failed to fetch model folders", _), Error(`Failed to fetch model folders: ${_.status} ${_.statusText}`);
+      return _.json();
+    } catch (_) {
+      throw this.log("getModelFolders", "Error fetching model folders", _), _;
+    }
+  }
+  async getModelFiles(_) {
+    try {
+      let Z = await this.fetchApi(`/experiment/models/${encodeURIComponent(_)}`);
+      if (!Z.ok)
+        throw this.log("getModelFiles", "Failed to fetch model files", { folder: _, response: Z }), Error(`Failed to fetch model files: ${Z.status} ${Z.statusText}`);
+      return Z.json();
+    } catch (Z) {
+      throw this.log("getModelFiles", "Error fetching model files", { folder: _, error: Z }), Z;
+    }
+  }
+  async getModelPreview(_, Z, $) {
+    try {
+      let J = await this.fetchApi(`/experiment/models/preview/${encodeURIComponent(_)}/${Z}/${encodeURIComponent($)}`);
+      if (!J.ok)
+        throw this.log("getModelPreview", "Failed to fetch model preview", { folder: _, pathIndex: Z, filename: $, response: J }), Error(`Failed to fetch model preview: ${J.status} ${J.statusText}`);
+      let z = J.headers.get("content-type") || "image/webp";
+      return { body: await J.arrayBuffer(), contentType: z };
+    } catch (J) {
+      throw this.log("getModelPreview", "Error fetching model preview", { folder: _, pathIndex: Z, filename: $, error: J }), J;
+    }
+  }
+  getModelPreviewUrl(_, Z, $) {
+    return this.apiURL(`/experiment/models/preview/${encodeURIComponent(_)}/${Z}/${encodeURIComponent($)}`);
+  }
+}
+var m;
+((J) => {
+  J[J.PICK_ZERO = 0] = "PICK_ZERO";
+  J[J.PICK_LOWEST = 1] = "PICK_LOWEST";
+  J[J.PICK_ROUTINE = 2] = "PICK_ROUTINE";
+})(m ||= {});
+if (typeof CustomEvent > "u")
+  global.CustomEvent = class extends Event {
+    detail;
+    constructor(Z, $ = {}) {
+      super(Z, $);
+      this.detail = $.detail || null;
+    }
+  };
+
+// src/lib/comfyui.ts
+var COMFYUI_URL = "http://localhost:8188";
+var COMFYUI_DIR = process.env.COMFYUI_DIR || `${process.env.HOME}/ComfyUI`;
+var comfyApi = new x(COMFYUI_URL).init(20, 1000);
+
+// src/task/queue.ts
+var queueTask = async (data) => {
+  const { id: task_id } = data;
+  const prompt = await getWorkflow(data.prompt);
+  const task = getTask(task_id);
+  if (task.prompt_id) {
+    console.log("task already has prompt id", task_id, task.prompt_id);
+    return;
+  }
+  const resp = await comfyApi.appendPrompt(prompt);
+  const prompt_id = resp.prompt_id;
+  if (prompt_id) {
+    const success = updatePromptId(task_id, prompt_id);
+  }
+  await syncTaskStatus(task_id);
 };
+async function getWorkflow(workflowInput) {
+  let workflow;
+  if (typeof workflowInput === "string") {
+    workflow = JSON.parse(workflowInput);
+  } else {
+    workflow = workflowInput;
+  }
+  const processedWorkflow = await processWorkflowUrls(workflow);
+  return processedWorkflow;
+}
+async function processWorkflowUrls(obj) {
+  const urlsToDownload = new Set;
+  collectUrls(obj, urlsToDownload);
+  const urlMap = new Map;
+  if (urlsToDownload.size > 0) {
+    const urls = Array.from(urlsToDownload);
+    const maxConcurrency = 3;
+    let index = 0;
+    const results = [];
+    const worker = async () => {
+      while (true) {
+        let current;
+        if (index < urls.length) {
+          current = urls[index++];
+        } else {
+          break;
+        }
+        const filename = await downloadAndReplaceUrl(current);
+        results.push({ url: current, filename });
+      }
+    };
+    const workers = Array.from({ length: Math.min(maxConcurrency, urls.length) }, () => worker());
+    await Promise.all(workers);
+    results.forEach(({ url, filename }) => {
+      urlMap.set(url, filename);
+    });
+  }
+  return replaceUrls(obj, urlMap);
+}
+function collectUrls(obj, urlsToDownload) {
+  if (typeof obj !== "object" || obj === null) {
+    return;
+  }
+  if (Array.isArray(obj)) {
+    for (const item of obj) {
+      collectUrls(item, urlsToDownload);
+    }
+    return;
+  }
+  for (const [key, value2] of Object.entries(obj)) {
+    if (key.includes("image")) {
+      console.log("found", key, value2);
+    }
+    if (typeof value2 === "string" && isTargetUrl(value2)) {
+      urlsToDownload.add(value2);
+    } else {
+      collectUrls(value2, urlsToDownload);
+    }
+  }
+}
+function replaceUrls(obj, urlMap) {
+  if (typeof obj !== "object" || obj === null) {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map((item) => replaceUrls(item, urlMap));
+  }
+  const processedObj = {};
+  for (const [key, value2] of Object.entries(obj)) {
+    if (typeof value2 === "string" && isTargetUrl(value2)) {
+      const filename = urlMap.get(value2);
+      processedObj[key] = filename || value2;
+      console.log(value2, filename);
+    } else {
+      processedObj[key] = replaceUrls(value2, urlMap);
+    }
+  }
+  return processedObj;
+}
+function isTargetUrl(value2) {
+  try {
+    const url = new URL(value2);
+    return url.protocol === "https:" && url.hostname === "ai.drahul.dev";
+  } catch {
+    return false;
+  }
+}
+async function downloadFile(url, filename) {
+  const comfyuiPath = COMFYUI_DIR;
+  const inputDir = path2.join(comfyuiPath, "input");
+  await fs3.mkdir(inputDir, { recursive: true });
+  const resp = await fetch(url);
+  const arrayBuffer = await resp.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
+  await fs3.writeFile(path2.join(inputDir, filename), buffer);
+}
+async function downloadAndReplaceUrl(url) {
+  if (!isTargetUrl(url)) {
+    console.log(url);
+    return url;
+  }
+  const originalFilename = url.split("/").pop() || "input";
+  const extension = path2.extname(originalFilename);
+  const baseName = path2.basename(originalFilename, extension);
+  const uniqueId = crypto.randomUUID().substring(0, 8);
+  const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
+  console.log("Downloading file", {
+    url,
+    uniqueFilename
+  });
+  await downloadFile(url, uniqueFilename);
+  console.log("Downloaded file to", uniqueFilename);
+  return uniqueFilename;
+}
 
 // src/index.ts
 var actions = {
   syncDependencies,
-  syncTask
+  syncTaskStatus,
+  queueTask
 };
 var backendSocket = new reconnecting_websocket_mjs_default(`${WS_URL}/ws/machine?id=${machineId}`);
 backendSocket.onopen = () => {
@@ -2462,7 +3447,7 @@ backendSocket.onclose = (e) => {
 backendSocket.onmessage = (e) => {
   try {
     const [key, data] = JSON.parse(e.data);
-    console.log(`Received message: ${key}`, data);
+    console.log(`Received message: ${key}`);
     const action = actions[key];
     if (action)
       action(data);

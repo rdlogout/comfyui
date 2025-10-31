@@ -1,19 +1,23 @@
 import { api } from "src/lib/api";
 import { getTask } from "src/lib/db";
 
-export const syncStatus = async (id: string) => {
-	const status = await getTask(id);
-	if (!status) {
+export const syncTaskStatus = async (id: string) => {
+	const task = await getTask(id);
+	if (!task) {
 		console.log("task not found", id);
 		return;
 	}
+	if (!task.prompt_id) {
+		console.log("task not queued", id);
+		return;
+	}
 
-	if (status.files) {
-		const files = JSON.parse(status.files);
+	if (task.files) {
+		const files = JSON.parse(task.files);
 	}
 
 	await api.client.updateTask({
 		id,
-		data: status,
+		data: task,
 	});
 };

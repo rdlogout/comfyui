@@ -1,11 +1,12 @@
 import ReconnectingWebSocket from "reconnecting-websocket";
 import { syncDependencies } from "./dependency";
-import { syncTask } from "./task";
+import { queueTask, syncTaskStatus } from "./task";
 import { machineId, WS_URL } from "./lib/api";
 
 const actions: Record<string, (data?: any) => Promise<any>> = {
 	syncDependencies,
-	syncTask,
+	syncTaskStatus,
+	queueTask,
 };
 
 const backendSocket = new ReconnectingWebSocket(`${WS_URL}/ws/machine?id=${machineId}`);
@@ -21,7 +22,7 @@ backendSocket.onclose = (e: any) => {
 backendSocket.onmessage = (e: MessageEvent) => {
 	try {
 		const [key, data] = JSON.parse(e.data);
-		console.log(`Received message: ${key}`, data);
+		console.log(`Received message: ${key}`);
 		const action = actions[key];
 		if (action) action(data);
 	} catch (err) {

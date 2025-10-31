@@ -243,6 +243,32 @@ function parseGitHubUrl(url: string): GitHubInfo | null {
 }
 
 /**
+ * Check if a directory exists with case-insensitive matching
+ */
+async function existsCaseInsensitive(targetPath: string): Promise<string | null> {
+	try {
+		const parentDir = path.dirname(targetPath);
+		const targetName = path.basename(targetPath);
+		
+		// Check if parent directory exists
+		if (!existsSync(parentDir)) {
+			return null;
+		}
+		
+		// Read directory contents
+		const files = await fs.readdir(parentDir);
+		
+		// Look for case-insensitive match
+		const match = files.find(file => file.toLowerCase() === targetName.toLowerCase());
+		
+		return match ? path.join(parentDir, match) : null;
+	} catch (error) {
+		console.error(`Error checking case-insensitive existence for ${targetPath}:`, error);
+		return null;
+	}
+}
+
+/**
  * Get ComfyUI path - this should be implemented based on your project structure
  */
 function getComfyUIPath(): string {
@@ -297,12 +323,15 @@ export async function syncNode(nodeUrl: string): Promise<SyncNodeResponse> {
 
 		const repoPath = path.join(customNodesPath, repoName);
 
-		// Check if folder already exists
-		if (existsSync(repoPath)) {
-			console.log(`Custom node ${repoName} already exists`);
+		// Check if folder already exists (case-insensitive)
+		const existingRepoPath = await existsCaseInsensitive(repoPath);
+		if (existingRepoPath) {
+			console.log(`Custom node ${repoName} already exists at ${existingRepoPath}`);
+			// Use the actual existing path for further operations
+			const actualRepoPath = existingRepoPath;
 
 			// Check if requirements.txt exists and install missing dependencies in background
-			const requirementsPath = path.join(repoPath, "requirements.txt");
+			const requirementsPath = path.join(actualRepoPath, "requirements.txt");
 			if (existsSync(requirementsPath)) {
 				// Analyze requirements first
 				const analysis = await analyzeRequirements(requirementsPath, repoName);
@@ -316,7 +345,7 @@ export async function syncNode(nodeUrl: string): Promise<SyncNodeResponse> {
 				return {
 					success: true,
 					alreadyExists: true,
-					message: `Custom node ${repoName} already exists, dependencies being updated in background`,
+					message: `Custom node ${repoName} already exists at ${actualRepoPath}, dependencies being updated in background`,
 					repoName,
 					dependenciesInstalled: analysis.safeToInstall.length,
 					skippedDependencies: analysis.skippedCritical.length,
@@ -326,7 +355,7 @@ export async function syncNode(nodeUrl: string): Promise<SyncNodeResponse> {
 			return {
 				success: true,
 				alreadyExists: true,
-				message: `Custom node ${repoName} already exists`,
+				message: `Custom node ${repoName} already exists at ${actualRepoPath}`,
 				repoName,
 			};
 		}
@@ -337,11 +366,11 @@ export async function syncNode(nodeUrl: string): Promise<SyncNodeResponse> {
 		if (branch && branch !== "main") {
 			// Clone specific branch
 			await execAsync(`git clone --branch ${branch} --single-branch ${cloneUrl} ${repoPath}`);
-			console.log(`Custom node ${repoName} (branch: ${branch}) installed successfully`);
+			console.log(`Custom node ${repoName} (branch: ${branch}) installed successfully to ${repoPath}`);
 		} else {
 			// Clone default branch
 			await execAsync(`git clone ${cloneUrl} ${repoPath}`);
-			console.log(`Custom node ${repoName} installed successfully`);
+			console.log(`Custom node ${repoName} installed successfully to ${repoPath}`);
 		}
 
 		// Check if requirements.txt exists and install dependencies in background
@@ -359,7 +388,7 @@ export async function syncNode(nodeUrl: string): Promise<SyncNodeResponse> {
 			return {
 				success: true,
 				alreadyExists: false,
-				message: `Custom node ${repoName} installed successfully, dependencies being installed in background`,
+				message: `Custom node ${repoName} installed successfully to ${repoPath}, dependencies being installed in background`,
 				repoName,
 				dependenciesInstalled: analysis.safeToInstall.length,
 				skippedDependencies: analysis.skippedCritical.length,
@@ -369,7 +398,7 @@ export async function syncNode(nodeUrl: string): Promise<SyncNodeResponse> {
 		return {
 			success: true,
 			alreadyExists: false,
-			message: `Custom node ${repoName} installed successfully`,
+			message: `Custom node ${repoName} installed successfully to ${repoPath}`,
 			repoName,
 		};
 	} catch (error) {

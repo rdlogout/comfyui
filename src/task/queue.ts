@@ -1,9 +1,9 @@
 import path from "path";
 import crypto from "crypto";
 import fs from "fs/promises";
-import { insertTask, updateTask } from "src/lib/db";
+import { getTask, insertTask, updatePromptId, updateTask } from "src/lib/db";
 import { comfyApi, COMFYUI_DIR } from "src/lib/comfyui";
-import { syncStatus } from "./status";
+import { syncTaskStatus } from "./status";
 type QueueTaskData = {
 	id: string;
 	prompt: any;
@@ -11,15 +11,25 @@ type QueueTaskData = {
 
 export const queueTask = async (data: QueueTaskData) => {
 	const { id: task_id } = data;
-	const shouldContinue = insertTask(task_id);
-	if (!shouldContinue) {
-		console.log("task already exists", task_id);
+	const prompt = await getWorkflow(data.prompt);
+	const task = getTask(task_id);
+	if (task.prompt_id) {
+		console.log("task already has prompt id", task_id, task.prompt_id);
 		return;
 	}
-	const prompt = await getWorkflow(data.prompt);
 	const resp = await comfyApi.appendPrompt(prompt);
-	updateTask(task_id, { prompt_id: resp.prompt_id, error: JSON.stringify(resp.node_errors) });
-	await syncStatus(task_id);
+	const prompt_id = resp.prompt_id;
+	if (prompt_id) {
+		const success = updatePromptId(task_id, prompt_id);
+		// if(!success){
+		// 	console.log("failed to update prompt id", task_id, prompt_id);
+		// 	//cancel the task
+		// 	// comfyApi.(prompt_id);
+		// 	return;
+		// }
+	}
+	// updateTask(task_id, { prompt_id: resp.prompt_id, error: JSON.stringify(resp.node_errors) });
+	await syncTaskStatus(task_id);
 	// resp.
 };
 
