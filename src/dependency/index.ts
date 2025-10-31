@@ -30,7 +30,7 @@ export const syncDependencies = async (dependencies: Dependency[]) => {
 		const resp = await downloadModel(model.url, model.output);
 		return { id: model.id, type: "model", success: resp.success, message: resp.message };
 	});
-	const results = await Promise.all([...nodePromises, ...modelPromises]);
+	const results = await Promise.all([...nodePromises]);
 	const successResult = results.filter((r) => r.success);
 	console.log("Successfully synced dependencies:", results);
 	console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
