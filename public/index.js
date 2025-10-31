@@ -593,7 +593,12 @@ async function downloadModel(url, output) {
     const { repoId, type, filePath } = parseHuggingFaceUrl(url);
     console.log(`\uD83D\uDCE5 Downloading from ${url}...`);
     console.log(`\uD83D\uDCC2 Output directory: ${output}`);
-    let targetPath = output;
+    const absoluteOutput = path.isAbsolute(output) ? output : path.resolve(output);
+    let targetPath = absoluteOutput;
+    let outputDir = absoluteOutput;
+    if (type === "file" && filePath) {
+      outputDir = path.dirname(absoluteOutput);
+    }
     const alreadyExists = await checkExistingDownload(targetPath, type);
     if (alreadyExists) {
       console.log(`\u2705 Already exists: ${targetPath}`);
@@ -608,12 +613,15 @@ async function downloadModel(url, output) {
       cacheDir = path.resolve(cacheDir);
     }
     console.log(`\uD83D\uDCBE Using cache directory: ${cacheDir}`);
-    const absoluteOutput = path.isAbsolute(output) ? output : path.resolve(output);
-    await fs.mkdir(absoluteOutput, { recursive: true });
+    const dirToCreate = type === "file" && filePath ? path.dirname(absoluteOutput) : absoluteOutput;
+    await fs.mkdir(dirToCreate, { recursive: true });
     let command;
+    let actualFilePath = targetPath;
     if (type === "file" && filePath) {
-      command = `hf download ${repoId} ${filePath} --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
+      actualFilePath = path.join(outputDir, path.basename(filePath));
+      command = `hf download ${repoId} ${filePath} --local-dir "${outputDir}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCC4 Downloading file: ${filePath}`);
+      console.log(`\uD83D\uDCC4 Will be saved as: ${actualFilePath}`);
     } else if (type === "folder" && filePath) {
       command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCC1 Downloading folder: ${filePath}`);
@@ -637,18 +645,18 @@ async function downloadModel(url, output) {
     if (stdout) {
       console.log(stdout);
     }
-    const downloadCompleted = await checkExistingDownload(targetPath, type);
+    const downloadCompleted = await checkExistingDownload(actualFilePath, type);
     if (downloadCompleted) {
-      console.log(`\u2705 Successfully downloaded to ${absoluteOutput}`);
+      console.log(`\u2705 Successfully downloaded to ${actualFilePath}`);
       return {
         success: true,
-        message: `Successfully downloaded to ${absoluteOutput}`
+        message: `Successfully downloaded to ${actualFilePath}`
       };
     } else {
-      console.warn(`\u26A0\uFE0F  Download may be incomplete. Please check ${absoluteOutput}`);
+      console.warn(`\u26A0\uFE0F  Download may be incomplete. Please check ${actualFilePath}`);
       return {
         success: false,
-        message: `Download may be incomplete. Please check ${absoluteOutput}`
+        message: `Download may be incomplete. Please check ${actualFilePath}`
       };
     }
   } catch (error) {

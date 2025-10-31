@@ -93,13 +93,18 @@ export async function downloadModel(url: string, output: string): Promise<Downlo
 		console.log(`📥 Downloading from ${url}...`);
 		console.log(`📂 Output directory: ${output}`);
 
+		// Ensure output directory exists and is absolute
+		const absoluteOutput = path.isAbsolute(output) ? output : path.resolve(output);
+		
 		// Determine the target path for existence check
-		let targetPath: string = output;
-		// if (type === 'file' && filePath) {
-		//   targetPath = path.join(output, path.basename(filePath));
-		// } else {
-		//   targetPath = output;
-		// }
+		let targetPath: string = absoluteOutput;
+		let outputDir: string = absoluteOutput;
+		
+		if (type === 'file' && filePath) {
+			// For single files, we want to download directly to the specified file path
+			// So we need to use the parent directory as the output directory
+			outputDir = path.dirname(absoluteOutput);
+		}
 
 		// Check if already downloaded
 		const alreadyExists = await checkExistingDownload(targetPath, type);
@@ -120,16 +125,22 @@ export async function downloadModel(url: string, output: string): Promise<Downlo
 		}
 		console.log(`💾 Using cache directory: ${cacheDir}`);
 
-		// Ensure output directory exists and is absolute
-		const absoluteOutput = path.isAbsolute(output) ? output : path.resolve(output);
-		await fs.mkdir(absoluteOutput, { recursive: true });
+		// For files, create the parent directory; for directories/repos, create the target directory
+		const dirToCreate = (type === 'file' && filePath) ? path.dirname(absoluteOutput) : absoluteOutput;
+		await fs.mkdir(dirToCreate, { recursive: true });
 
 		let command: string;
 
+		let actualFilePath: string = targetPath;
+		
 		if (type === "file" && filePath) {
 			// Download single file
-			command = `hf download ${repoId} ${filePath} --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
+			// The HF CLI will download the file with its original name to the specified directory
+			// So we need to check for the actual file that was downloaded
+			actualFilePath = path.join(outputDir, path.basename(filePath));
+			command = `hf download ${repoId} ${filePath} --local-dir "${outputDir}" --cache-dir "${cacheDir}"`;
 			console.log(`📄 Downloading file: ${filePath}`);
+			console.log(`📄 Will be saved as: ${actualFilePath}`);
 		} else if (type === "folder" && filePath) {
 			// Download folder using include pattern
 			command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
@@ -163,18 +174,18 @@ export async function downloadModel(url: string, output: string): Promise<Downlo
 		}
 
 		// Verify download completed successfully
-		const downloadCompleted = await checkExistingDownload(targetPath, type);
+		const downloadCompleted = await checkExistingDownload(actualFilePath, type);
 		if (downloadCompleted) {
-			console.log(`✅ Successfully downloaded to ${absoluteOutput}`);
+			console.log(`✅ Successfully downloaded to ${actualFilePath}`);
 			return {
 				success: true,
-				message: `Successfully downloaded to ${absoluteOutput}`,
+				message: `Successfully downloaded to ${actualFilePath}`,
 			};
 		} else {
-			console.warn(`⚠️  Download may be incomplete. Please check ${absoluteOutput}`);
+			console.warn(`⚠️  Download may be incomplete. Please check ${actualFilePath}`);
 			return {
 				success: false,
-				message: `Download may be incomplete. Please check ${absoluteOutput}`,
+				message: `Download may be incomplete. Please check ${actualFilePath}`,
 			};
 		}
 	} catch (error) {
