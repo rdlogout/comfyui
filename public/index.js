@@ -2924,7 +2924,7 @@ var syncDependencies = async (dependencies) => {
   console.log("Syncing dependencies");
   console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
   const customNodes = dependencies.filter((d) => d.type === "custom_node");
-  const models = [];
+  const models = dependencies.filter((d) => d.type === "model");
   const nodePromises = customNodes.map(async (node) => {
     console.log(`Installing custom node from ${node.url}`);
     const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
@@ -2935,7 +2935,7 @@ var syncDependencies = async (dependencies) => {
     const resp = await downloadModel(model.url, model.output);
     return { id: model.id, type: "model", success: resp.success, message: resp.message };
   });
-  const results = await Promise.all([...nodePromises]);
+  const results = await Promise.all([...nodePromises, ...modelPromises]);
   const successResult = results.filter((r) => r.success);
   console.log({ successResult, results });
   console.log("Successfully synced dependencies:");
