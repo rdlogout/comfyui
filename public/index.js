@@ -3048,6 +3048,7 @@ var syncTaskStatus = async (id) => {
     task.files = JSON.parse(task.files);
   const files = Array.isArray(task.files) ? task.files.map((file) => {
     const localFile = Bun.file(path2.join(COMFYUI_DIR, file));
+    return localFile;
     return new File([localFile], localFile.name, {
       type: localFile.type
     });
