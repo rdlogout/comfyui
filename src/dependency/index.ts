@@ -20,6 +20,7 @@ export const syncDependencies = async (dependencies: Dependency[]) => {
 
 	const nodePromises = customNodes.map(async (node: Dependency) => {
 		const resp = await syncNode(node.url);
+		console.log({ resp });
 		return { id: node.id, type: "custom_node", success: resp.success, message: resp.message };
 	});
 	const modelPromises = models.map(async (model: any) => {

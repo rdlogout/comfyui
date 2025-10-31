@@ -2413,6 +2413,7 @@ var syncDependencies = async (dependencies) => {
   const models = dependencies.filter((d) => d.type === "model");
   const nodePromises = customNodes.map(async (node) => {
     const resp = await syncNode(node.url);
+    console.log({ resp });
     return { id: node.id, type: "custom_node", success: resp.success, message: resp.message };
   });
   const modelPromises = models.map(async (model) => {
