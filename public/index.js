@@ -542,287 +542,12 @@ var ReconnectingWebSocket = function() {
 }();
 var reconnecting_websocket_mjs_default = ReconnectingWebSocket;
 
-// src/dependency/node.ts
+// src/dependency/model.ts
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as fs from "fs/promises";
-import * as path from "path";
 import { existsSync } from "fs";
 var execAsync = promisify(exec);
-var CRITICAL_DEPS = new Set([
-  "torch",
-  "torchvision",
-  "torchaudio",
-  "numpy",
-  "pillow",
-  "opencv-python",
-  "opencv-contrib-python",
-  "transformers",
-  "accelerate",
-  "safetensors",
-  "xformers",
-  "einops",
-  "diffusers",
-  "compel",
-  "tokenizers",
-  "huggingface-hub",
-  "scipy",
-  "scikit-learn",
-  "matplotlib",
-  "requests",
-  "aiohttp",
-  "websockets"
-]);
-async function getInstalledPackages() {
-  try {
-    const { stdout } = await execAsync("pip list --format=json");
-    const packages = JSON.parse(stdout);
-    return packages.reduce((acc, pkg) => {
-      acc[pkg.name.toLowerCase()] = pkg.version;
-      return acc;
-    }, {});
-  } catch (error) {
-    console.error("Error getting installed packages:", error);
-    return {};
-  }
-}
-function parseRequirementLine(line) {
-  const trimmedLine = line.trim();
-  if (!trimmedLine || trimmedLine.startsWith("#")) {
-    return null;
-  }
-  const match = trimmedLine.match(/^([a-zA-Z0-9_-]+)([><=!~]+.*)?$/);
-  if (match) {
-    return {
-      name: match[1].toLowerCase().replace("_", "-"),
-      original: trimmedLine,
-      constraint: match[2] || ""
-    };
-  }
-  return null;
-}
-async function analyzeRequirements(requirementsPath, repoName) {
-  try {
-    const installedPackages = await getInstalledPackages();
-    const safeRequirements = [];
-    const skippedPackages = [];
-    const alreadyInstalled = [];
-    const content = await fs.readFile(requirementsPath, "utf-8");
-    const lines = content.split(`
-`);
-    for (const line of lines) {
-      const parsed = parseRequirementLine(line);
-      if (!parsed)
-        continue;
-      const packageName = parsed.name;
-      const originalLine = parsed.original;
-      if (CRITICAL_DEPS.has(packageName)) {
-        if (packageName in installedPackages) {
-          skippedPackages.push(`${packageName} (installed: ${installedPackages[packageName]} - protected from upgrade)`);
-        } else {
-          safeRequirements.push(originalLine);
-        }
-        continue;
-      }
-      safeRequirements.push(originalLine);
-    }
-    return {
-      safeToInstall: safeRequirements,
-      skippedCritical: skippedPackages,
-      alreadyInstalled,
-      totalRequested: safeRequirements.length + skippedPackages.length + alreadyInstalled.length
-    };
-  } catch (error) {
-    console.error(`Error analyzing requirements for ${repoName}:`, error);
-    return {
-      safeToInstall: [],
-      skippedCritical: [],
-      alreadyInstalled: [],
-      totalRequested: 0,
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-async function installRequirementsAsync(pipExecutable, requirementsPath, repoName) {
-  try {
-    console.log(`Installing dependencies for ${repoName} in background...`);
-    const analysis = await analyzeRequirements(requirementsPath, repoName);
-    if (analysis.skippedCritical.length > 0) {
-      console.warn(`Skipped critical packages for ${repoName}:`, analysis.skippedCritical.join(", "));
-    }
-    if (analysis.safeToInstall.length === 0) {
-      console.log(`No new safe dependencies to install for ${repoName}`);
-      return;
-    }
-    console.log(`Installing ${analysis.safeToInstall.length} safe dependencies for ${repoName}`);
-    const tempRequirementsPath = requirementsPath + ".safe";
-    try {
-      await fs.writeFile(tempRequirementsPath, analysis.safeToInstall.join(`
-`));
-      const { stdout, stderr } = await execAsync(`${pipExecutable} install -r ${tempRequirementsPath}`);
-      console.log(`Successfully installed safe dependencies for ${repoName}`);
-      if (stdout) {
-        console.debug(`Install output: ${stdout}`);
-      }
-    } finally {
-      if (existsSync(tempRequirementsPath)) {
-        await fs.unlink(tempRequirementsPath);
-      }
-    }
-  } catch (error) {
-    console.error(`Failed to install dependencies for ${repoName}:`, error);
-  }
-}
-function parseGitHubUrl(url) {
-  try {
-    const cleanUrl = url.replace(/\/$/, "");
-    const githubPattern = /^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)(?:\/tree\/([^\/]+)(?:\/(.*))?)?(?:\.git)?$/;
-    const match = cleanUrl.match(githubPattern);
-    if (!match) {
-      return null;
-    }
-    const user = match[1];
-    const repo = match[2];
-    const branch = match[3] || "main";
-    const subfolder = match[4] || undefined;
-    const cloneUrl = `https://github.com/${user}/${repo}.git`;
-    return {
-      user,
-      repo,
-      branch,
-      subfolder,
-      cloneUrl,
-      originalUrl: url
-    };
-  } catch (error) {
-    console.error(`Error parsing GitHub URL ${url}:`, error);
-    return null;
-  }
-}
-async function existsCaseInsensitive(targetPath) {
-  try {
-    const parentDir = path.dirname(targetPath);
-    const targetName = path.basename(targetPath);
-    if (!existsSync(parentDir)) {
-      return null;
-    }
-    const files = await fs.readdir(parentDir);
-    const match = files.find((file) => file.toLowerCase() === targetName.toLowerCase());
-    return match ? path.join(parentDir, match) : null;
-  } catch (error) {
-    console.error(`Error checking case-insensitive existence for ${targetPath}:`, error);
-    return null;
-  }
-}
-function getComfyUIPath() {
-  return process.env.COMFYUI_PATH || "/path/to/comfyui";
-}
-async function syncNode(nodeUrl) {
-  try {
-    const comfyuiPath = getComfyUIPath();
-    const customNodesPath = path.join(comfyuiPath, "custom_nodes");
-    const venvPath = path.join(comfyuiPath, "venv");
-    const pipExecutable = path.join(venvPath, "bin", "pip");
-    if (!existsSync(customNodesPath)) {
-      return {
-        success: false,
-        alreadyExists: false,
-        message: "Custom nodes directory not found",
-        repoName: "",
-        error: "Custom nodes directory not found"
-      };
-    }
-    const githubInfo = parseGitHubUrl(nodeUrl);
-    let repoName;
-    let cloneUrl;
-    let branch;
-    if (githubInfo) {
-      repoName = githubInfo.repo;
-      cloneUrl = githubInfo.cloneUrl;
-      branch = githubInfo.branch;
-      console.log(`Parsed GitHub URL: ${githubInfo.user}/${repoName} (branch: ${branch})`);
-    } else {
-      repoName = nodeUrl.split("/").pop()?.replace(".git", "") || "unknown";
-      cloneUrl = nodeUrl;
-      branch = "main";
-      console.log(`Using fallback parsing for non-GitHub URL: ${repoName}`);
-    }
-    const repoPath = path.join(customNodesPath, repoName);
-    const existingRepoPath = await existsCaseInsensitive(repoPath);
-    if (existingRepoPath) {
-      console.log(`Custom node ${repoName} already exists at ${existingRepoPath}`);
-      const actualRepoPath = existingRepoPath;
-      const requirementsPath2 = path.join(actualRepoPath, "requirements.txt");
-      if (existsSync(requirementsPath2)) {
-        const analysis = await analyzeRequirements(requirementsPath2, repoName);
-        if (analysis.safeToInstall.length > 0) {
-          installRequirementsAsync(pipExecutable, requirementsPath2, repoName).catch(console.error);
-          console.log(`Installing ${analysis.safeToInstall.length} safe dependencies for existing node ${repoName} in background`);
-        }
-        return {
-          success: true,
-          alreadyExists: true,
-          message: `Custom node ${repoName} already exists at ${actualRepoPath}, dependencies being updated in background`,
-          repoName,
-          dependenciesInstalled: analysis.safeToInstall.length,
-          skippedDependencies: analysis.skippedCritical.length
-        };
-      }
-      return {
-        success: true,
-        alreadyExists: true,
-        message: `Custom node ${repoName} already exists at ${actualRepoPath}`,
-        repoName
-      };
-    }
-    console.log(`Cloning custom node from ${cloneUrl} (branch: ${branch})`);
-    if (branch && branch !== "main") {
-      await execAsync(`git clone --branch ${branch} --single-branch ${cloneUrl} ${repoPath}`);
-      console.log(`Custom node ${repoName} (branch: ${branch}) installed successfully to ${repoPath}`);
-    } else {
-      await execAsync(`git clone ${cloneUrl} ${repoPath}`);
-      console.log(`Custom node ${repoName} installed successfully to ${repoPath}`);
-    }
-    const requirementsPath = path.join(repoPath, "requirements.txt");
-    if (existsSync(requirementsPath)) {
-      const analysis = await analyzeRequirements(requirementsPath, repoName);
-      if (analysis.safeToInstall.length > 0) {
-        installRequirementsAsync(pipExecutable, requirementsPath, repoName).catch(console.error);
-        console.log(`Installing ${analysis.safeToInstall.length} safe dependencies for new node ${repoName} in background`);
-      }
-      return {
-        success: true,
-        alreadyExists: false,
-        message: `Custom node ${repoName} installed successfully to ${repoPath}, dependencies being installed in background`,
-        repoName,
-        dependenciesInstalled: analysis.safeToInstall.length,
-        skippedDependencies: analysis.skippedCritical.length
-      };
-    }
-    return {
-      success: true,
-      alreadyExists: false,
-      message: `Custom node ${repoName} installed successfully to ${repoPath}`,
-      repoName
-    };
-  } catch (error) {
-    console.error(`Error installing custom node ${nodeUrl}:`, error);
-    return {
-      success: false,
-      alreadyExists: false,
-      message: `Failed to install custom node: ${error instanceof Error ? error.message : String(error)}`,
-      repoName: nodeUrl.split("/").pop()?.replace(".git", "") || "unknown",
-      error: error instanceof Error ? error.message : String(error)
-    };
-  }
-}
-
-// src/dependency/model.ts
-import { exec as exec2 } from "child_process";
-import { promisify as promisify2 } from "util";
-import * as fs2 from "fs/promises";
-import { existsSync as existsSync2 } from "fs";
-var execAsync2 = promisify2(exec2);
 function parseHuggingFaceUrl(url) {
   const cleanUrl = url.replace(/\/$/, "");
   const match = cleanUrl.match(/https:\/\/huggingface\.co\/([^\/]+\/[^\/]+)/);
@@ -843,16 +568,16 @@ function parseHuggingFaceUrl(url) {
   return { repoId, type: "repo" };
 }
 async function checkExistingDownload(outputPath, type) {
-  if (!existsSync2(outputPath)) {
+  if (!existsSync(outputPath)) {
     return false;
   }
   try {
-    const stats = await fs2.stat(outputPath);
+    const stats = await fs.stat(outputPath);
     if (type === "file") {
       return stats.isFile() && stats.size > 0;
     } else {
       if (stats.isDirectory()) {
-        const files = await fs2.readdir(outputPath);
+        const files = await fs.readdir(outputPath);
         return files.length > 0;
       }
     }
@@ -878,7 +603,7 @@ async function downloadModel(url, output) {
     }
     const cacheDir = process.env.HF_HOME || process.env.HF_HUB_CACHE || "~/.cache/huggingface";
     console.log(`\uD83D\uDCBE Using cache directory: ${cacheDir}`);
-    await fs2.mkdir(output, { recursive: true });
+    await fs.mkdir(output, { recursive: true });
     let command;
     if (type === "file" && filePath) {
       command = `hf download ${repoId} ${filePath} --local-dir "${output}" --cache-dir "${cacheDir}"`;
@@ -899,7 +624,7 @@ async function downloadModel(url, output) {
         HF_HUB_DISABLE_SYMLINKS: "0"
       }
     };
-    const { stdout, stderr } = await execAsync2(command, execOptions);
+    const { stdout, stderr } = await execAsync(command, execOptions);
     if (stderr && !stderr.includes("warning") && !stderr.includes("already exists") && !stderr.includes("Fetching") && !stderr.includes("100%")) {
       console.warn(`\u26A0\uFE0F  Warning: ${stderr}`);
     }
@@ -1710,9 +1435,9 @@ function resolveFriendlyClientOptions(options) {
   };
 }
 function createORPCClient(link, options = {}) {
-  const path2 = options.path ?? [];
+  const path = options.path ?? [];
   const procedureClient = async (...[input, options2 = {}]) => {
-    return await link.call(path2, input, resolveFriendlyClientOptions(options2));
+    return await link.call(path, input, resolveFriendlyClientOptions(options2));
   };
   const recursive = new Proxy(procedureClient, {
     get(target, key) {
@@ -1721,7 +1446,7 @@ function createORPCClient(link, options = {}) {
       }
       return createORPCClient(link, {
         ...options,
-        path: [...path2, key]
+        path: [...path, key]
       });
     }
   });
@@ -2008,25 +1733,25 @@ class StandardLink {
   }
   interceptors;
   clientInterceptors;
-  call(path2, input, options) {
-    return runWithSpan({ name: `${ORPC_NAME}.${path2.join("/")}`, signal: options.signal }, (span) => {
+  call(path, input, options) {
+    return runWithSpan({ name: `${ORPC_NAME}.${path.join("/")}`, signal: options.signal }, (span) => {
       span?.setAttribute("rpc.system", ORPC_NAME);
-      span?.setAttribute("rpc.method", path2.join("."));
+      span?.setAttribute("rpc.method", path.join("."));
       if (isAsyncIteratorObject(input)) {
         input = asyncIteratorWithSpan({ name: "consume_event_iterator_input", signal: options.signal }, input);
       }
-      return intercept(this.interceptors, { ...options, path: path2, input }, async ({ path: path22, input: input2, ...options2 }) => {
+      return intercept(this.interceptors, { ...options, path, input }, async ({ path: path2, input: input2, ...options2 }) => {
         const otelConfig = getGlobalOtelConfig();
         let otelContext;
         const currentSpan = otelConfig?.trace.getActiveSpan() ?? span;
         if (currentSpan && otelConfig) {
           otelContext = otelConfig?.trace.setSpan(otelConfig.context.active(), currentSpan);
         }
-        const request = await runWithSpan({ name: "encode_request", context: otelContext }, () => this.codec.encode(path22, input2, options2));
-        const response = await intercept(this.clientInterceptors, { ...options2, input: input2, path: path22, request }, ({ input: input3, path: path3, request: request2, ...options3 }) => {
+        const request = await runWithSpan({ name: "encode_request", context: otelContext }, () => this.codec.encode(path2, input2, options2));
+        const response = await intercept(this.clientInterceptors, { ...options2, input: input2, path: path2, request }, ({ input: input3, path: path3, request: request2, ...options3 }) => {
           return runWithSpan({ name: "send_request", signal: options3.signal, context: otelContext }, () => this.sender.call(request2, options3, path3, input3));
         });
-        const output = await runWithSpan({ name: "decode_response", context: otelContext }, () => this.codec.decode(response, options2, path22, input2));
+        const output = await runWithSpan({ name: "decode_response", context: otelContext }, () => this.codec.decode(response, options2, path2, input2));
         if (isAsyncIteratorObject(output)) {
           return asyncIteratorWithSpan({ name: "consume_event_iterator_output", signal: options2.signal }, output);
         }
@@ -2181,8 +1906,8 @@ class StandardRPCJsonSerializer {
     return ref.data;
   }
 }
-function toHttpPath(path2) {
-  return `/${path2.map(encodeURIComponent).join("/")}`;
+function toHttpPath(path) {
+  return `/${path.map(encodeURIComponent).join("/")}`;
 }
 function toStandardHeaders2(headers) {
   if (typeof headers.forEach === "function") {
@@ -2208,18 +1933,18 @@ class StandardRPCLinkCodec {
   fallbackMethod;
   expectedMethod;
   headers;
-  async encode(path2, input, options) {
-    let headers = toStandardHeaders2(await value(this.headers, options, path2, input));
+  async encode(path, input, options) {
+    let headers = toStandardHeaders2(await value(this.headers, options, path, input));
     if (options.lastEventId !== undefined) {
       headers = mergeStandardHeaders(headers, { "last-event-id": options.lastEventId });
     }
-    const expectedMethod = await value(this.expectedMethod, options, path2, input);
-    const baseUrl = await value(this.baseUrl, options, path2, input);
+    const expectedMethod = await value(this.expectedMethod, options, path, input);
+    const baseUrl = await value(this.baseUrl, options, path, input);
     const url = new URL(baseUrl);
-    url.pathname = `${url.pathname.replace(/\/$/, "")}${toHttpPath(path2)}`;
+    url.pathname = `${url.pathname.replace(/\/$/, "")}${toHttpPath(path)}`;
     const serialized = this.serializer.serialize(input);
     if (expectedMethod === "GET" && !(serialized instanceof FormData) && !isAsyncIteratorObject(serialized)) {
-      const maxUrlLength = await value(this.maxUrlLength, options, path2, input);
+      const maxUrlLength = await value(this.maxUrlLength, options, path, input);
       const getUrl = new URL(url);
       getUrl.searchParams.append("data", stringifyJSON(serialized));
       if (getUrl.toString().length <= maxUrlLength) {
@@ -2368,9 +2093,9 @@ class LinkFetchClient {
     this.toFetchRequestOptions = options;
     this.adapterInterceptors = toArray(options.adapterInterceptors);
   }
-  async call(standardRequest, options, path2, input) {
+  async call(standardRequest, options, path, input) {
     const request = toFetchRequest(standardRequest, this.toFetchRequestOptions);
-    const fetchResponse = await intercept(this.adapterInterceptors, { ...options, request, path: path2, input, init: { redirect: "manual" } }, ({ request: request2, path: path22, input: input2, init, ...options2 }) => this.fetch(request2, init, options2, path22, input2));
+    const fetchResponse = await intercept(this.adapterInterceptors, { ...options, request, path, input, init: { redirect: "manual" } }, ({ request: request2, path: path2, input: input2, init, ...options2 }) => this.fetch(request2, init, options2, path2, input2));
     const lazyResponse = toStandardLazyResponse(fetchResponse, { signal: request.signal });
     return lazyResponse;
   }
@@ -2404,117 +2129,6 @@ var link = new RPCLink({
   }
 });
 var api = createORPCClient(link);
-
-// src/dependency/index.ts
-var syncDependencies = async (dependencies) => {
-  console.log("Syncing dependencies");
-  console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
-  const customNodes = dependencies.filter((d) => d.type === "custom_node");
-  const models = dependencies.filter((d) => d.type === "model");
-  const nodePromises = customNodes.map(async (node) => {
-    const resp = await syncNode(node.url);
-    console.log({ resp });
-    return { id: node.id, type: "custom_node", success: resp.success, message: resp.message };
-  });
-  const modelPromises = models.map(async (model) => {
-    const resp = await downloadModel(model.url, model.output);
-    return { id: model.id, type: "model", success: resp.success, message: resp.message };
-  });
-  const results = await Promise.all([...nodePromises, ...modelPromises]);
-  const successResult = results.filter((r) => r.success);
-  console.log("Successfully synced dependencies:");
-  console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
-  await api.client.updateDependencies(successResult);
-};
-
-// src/lib/db.ts
-import { Database } from "bun:sqlite";
-var db = new Database("comfyui.sqlite");
-db.run(`
-		CREATE TABLE IF NOT EXISTS tasks (
-			id TEXT PRIMARY KEY,
-			prompt_id TEXT,
-			status TEXT,
-			progress REAL DEFAULT 0,
-			queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			started_at TIMESTAMP,
-			ended_at TIMESTAMP,
-			error TEXT,
-			active_node_id TEXT,
-			logs TEXT,
-			files TEXT,
-			name TEXT,
-			endpoint TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-		)
-	`);
-var updateTask = (id, obj) => {
-  const fields = [];
-  const values = [];
-  const placeholders = [];
-  Object.entries(obj).forEach(([key, value2]) => {
-    if (value2 !== undefined) {
-      fields.push(key);
-      values.push(value2);
-      placeholders.push(`?`);
-    }
-  });
-  if (fields.length === 0)
-    return;
-  fields.push("updated_at");
-  values.push("CURRENT_TIMESTAMP");
-  const updateFields = fields.map((field) => `${field} = ?`).join(", ");
-  const updateResult = db.run(`UPDATE prompts SET ${updateFields} WHERE id = ?`, [...values, id]);
-  if (updateResult.changes === 0) {
-    fields.push("id");
-    values.push(id);
-    placeholders.push("?");
-    const insertFields = fields.join(", ");
-    const insertPlaceholders = placeholders.join(", ");
-    db.run(`INSERT INTO prompts (${insertFields}) VALUES (${insertPlaceholders})`, values);
-  }
-};
-var getTask = (id) => {
-  let task = db.query("SELECT * FROM tasks WHERE id = ?").get(id);
-  if (!task) {
-    db.run(`INSERT INTO tasks (id) VALUES (?)`, [id]);
-    task = { id };
-  }
-  return task;
-};
-var updatePromptId = (id, prompt_id) => {
-  const task = getTask(id);
-  if (task.prompt_id)
-    return false;
-  updateTask(id, { prompt_id });
-  return true;
-};
-
-// src/task/status.ts
-var syncTaskStatus = async (id) => {
-  const task = await getTask(id);
-  if (!task) {
-    console.log("task not found", id);
-    return;
-  }
-  if (!task.prompt_id) {
-    console.log("task not queued", id);
-    return;
-  }
-  if (task.files) {
-    const files = JSON.parse(task.files);
-  }
-  await api.client.updateTask({
-    id,
-    data: task
-  });
-};
-
-// src/task/queue.ts
-import path2 from "path";
-import crypto from "crypto";
-import fs3 from "fs/promises";
 
 // node_modules/@saintno/comfyui-sdk/build/index.esm.js
 import u from "ws";
@@ -3305,7 +2919,117 @@ var COMFYUI_URL = "http://localhost:8188";
 var COMFYUI_DIR = process.env.COMFYUI_DIR || `${process.env.HOME}/ComfyUI`;
 var comfyApi = new x(COMFYUI_URL).init(20, 1000);
 
+// src/dependency/index.ts
+var syncDependencies = async (dependencies) => {
+  console.log("Syncing dependencies");
+  console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
+  const customNodes = dependencies.filter((d) => d.type === "custom_node");
+  const models = dependencies.filter((d) => d.type === "model");
+  const nodePromises = customNodes.map(async (node) => {
+    console.log(`Installing custom node from ${node.url}`);
+    const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
+    console.log({ resp });
+    return { id: node.id, type: "custom_node", success: resp, message: "All Good" };
+  });
+  const modelPromises = models.map(async (model) => {
+    const resp = await downloadModel(model.url, model.output);
+    return { id: model.id, type: "model", success: resp.success, message: resp.message };
+  });
+  const results = await Promise.all([...nodePromises, ...modelPromises]);
+  const successResult = results.filter((r) => r.success);
+  console.log("Successfully synced dependencies:");
+  console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
+  await api.client.updateDependencies(successResult);
+};
+
+// src/lib/db.ts
+import { Database } from "bun:sqlite";
+var db = new Database("comfyui.sqlite");
+db.run(`
+		CREATE TABLE IF NOT EXISTS tasks (
+			id TEXT PRIMARY KEY,
+			prompt_id TEXT,
+			status TEXT,
+			progress REAL DEFAULT 0,
+			queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			started_at TIMESTAMP,
+			ended_at TIMESTAMP,
+			error TEXT,
+			active_node_id TEXT,
+			logs TEXT,
+			files TEXT,
+			name TEXT,
+			endpoint TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)
+	`);
+var updateTask = (id, obj) => {
+  const fields = [];
+  const values = [];
+  const placeholders = [];
+  Object.entries(obj).forEach(([key, value2]) => {
+    if (value2 !== undefined) {
+      fields.push(key);
+      values.push(value2);
+      placeholders.push(`?`);
+    }
+  });
+  if (fields.length === 0)
+    return;
+  fields.push("updated_at");
+  values.push("CURRENT_TIMESTAMP");
+  const updateFields = fields.map((field) => `${field} = ?`).join(", ");
+  const updateResult = db.run(`UPDATE prompts SET ${updateFields} WHERE id = ?`, [...values, id]);
+  if (updateResult.changes === 0) {
+    fields.push("id");
+    values.push(id);
+    placeholders.push("?");
+    const insertFields = fields.join(", ");
+    const insertPlaceholders = placeholders.join(", ");
+    db.run(`INSERT INTO prompts (${insertFields}) VALUES (${insertPlaceholders})`, values);
+  }
+};
+var getTask = (id) => {
+  let task = db.query("SELECT * FROM tasks WHERE id = ?").get(id);
+  if (!task) {
+    db.run(`INSERT INTO tasks (id) VALUES (?)`, [id]);
+    task = { id };
+  }
+  return task;
+};
+var updatePromptId = (id, prompt_id) => {
+  const task = getTask(id);
+  if (task.prompt_id)
+    return false;
+  updateTask(id, { prompt_id });
+  return true;
+};
+
+// src/task/status.ts
+var syncTaskStatus = async (id) => {
+  const task = await getTask(id);
+  if (!task) {
+    console.log("task not found", id);
+    return;
+  }
+  if (!task.prompt_id) {
+    console.log("task not queued", id);
+    return;
+  }
+  if (task.files) {
+    const files = JSON.parse(task.files);
+  }
+  await api.client.updateTask({
+    id,
+    data: task
+  });
+};
+
 // src/task/queue.ts
+import path from "path";
+import crypto from "crypto";
+import fs2 from "fs/promises";
 var queueTask = async (data) => {
   const { id: task_id } = data;
   const prompt = await getWorkflow(data.prompt);
@@ -3410,12 +3134,12 @@ function isTargetUrl(value2) {
 }
 async function downloadFile(url, filename) {
   const comfyuiPath = COMFYUI_DIR;
-  const inputDir = path2.join(comfyuiPath, "input");
-  await fs3.mkdir(inputDir, { recursive: true });
+  const inputDir = path.join(comfyuiPath, "input");
+  await fs2.mkdir(inputDir, { recursive: true });
   const resp = await fetch(url);
   const arrayBuffer = await resp.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  await fs3.writeFile(path2.join(inputDir, filename), buffer);
+  await fs2.writeFile(path.join(inputDir, filename), buffer);
 }
 async function downloadAndReplaceUrl(url) {
   if (!isTargetUrl(url)) {
@@ -3423,8 +3147,8 @@ async function downloadAndReplaceUrl(url) {
     return url;
   }
   const originalFilename = url.split("/").pop() || "input";
-  const extension = path2.extname(originalFilename);
-  const baseName = path2.basename(originalFilename, extension);
+  const extension = path.extname(originalFilename);
+  const baseName = path.basename(originalFilename, extension);
   const uniqueId = crypto.randomUUID().substring(0, 8);
   const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
   console.log("Downloading file", {
