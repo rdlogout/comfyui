@@ -6,6 +6,7 @@ export const COMFYUI_DIR = process.env.COMFYUI_DIR || path.join(homedir(), "Comf
 
 import { ComfyApi } from "@saintno/comfyui-sdk";
 import { onError, onProgress, onStart, onSuccess } from "./events";
+import { updateTaskByPromptId } from "./db";
 export const comfyApi = new ComfyApi(COMFYUI_URL).init(20, 1000);
 
 comfyApi.on("progress", onProgress);
@@ -18,10 +19,11 @@ comfyApi.on("execution_success", async (e) => {
 	const files = Object.values(history?.outputs || {})
 		.map((output) => Object.values(output).flat())
 		.flat()
-		.filter((item: any) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/"));
-	console.log({ files });
-	// updateTaskByPromptId(prompt_id, {
-	//     status: "completed",
-	//     ended_at: new Date().toISOString(),
-	// });
+		.map((item: any) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/"))
+		.filter(Boolean);
+	// console.log({ files });
+	updateTaskByPromptId(prompt_id, {
+		status: "completed",
+		ended_at: new Date().toISOString(),
+	});
 });

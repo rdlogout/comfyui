@@ -1,4 +1,6 @@
 import { api } from "src/lib/api";
+import { comfyApi, COMFYUI_DIR } from "src/lib/comfyui";
+import * as path from "path";
 import { getTask } from "src/lib/db";
 
 export const syncTaskStatus = async (id: string) => {
@@ -12,12 +14,22 @@ export const syncTaskStatus = async (id: string) => {
 		return;
 	}
 
-	if (task.files) {
-		const files = JSON.parse(task.files);
-	}
+	const files = Array.isArray(task.files)
+		? task.files.map((file) => {
+				const localFile = Bun.file(path.join(COMFYUI_DIR, file));
+				return new File([localFile], localFile.name!, {
+					type: localFile.type,
+				});
+		  })
+		: [];
+
+	console.log({ files });
 
 	await api.client.updateTask({
 		id,
-		data: task,
+		data: {
+			files,
+			...task,
+		},
 	});
 };

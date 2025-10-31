@@ -4,7 +4,7 @@ const db = new Database("comfyui.sqlite");
 type Task = {
 	id: string;
 	prompt_id?: string;
-	status?: string;
+	status?: "queued" | "running" | "completed" | "failed";
 	progress?: number;
 	queued_at?: string;
 	started_at?: string;

@@ -3042,8 +3042,11 @@ comfyApi.on("execution_success", async (e) => {
   const { prompt_id } = e.detail;
   const history = await comfyApi.getHistory(prompt_id);
   console.log({ history });
-  const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().filter((item) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/"));
-  console.log({ files });
+  const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/")).filter(Boolean);
+  updateTaskByPromptId(prompt_id, {
+    status: "completed",
+    ended_at: new Date().toISOString()
+  });
 });
 
 // src/dependency/index.ts
@@ -3069,6 +3072,7 @@ var syncDependencies = async (dependencies) => {
 };
 
 // src/task/status.ts
+import * as path3 from "path";
 var syncTaskStatus = async (id) => {
   const task = getTask(id);
   if (!task) {
@@ -3079,17 +3083,24 @@ var syncTaskStatus = async (id) => {
     console.log("task not queued", id);
     return;
   }
-  if (task.files) {
-    const files = JSON.parse(task.files);
-  }
+  const files = Array.isArray(task.files) ? task.files.map((file) => {
+    const localFile = Bun.file(path3.join(COMFYUI_DIR, file));
+    return new File([localFile], localFile.name, {
+      type: localFile.type
+    });
+  }) : [];
+  console.log({ files });
   await api.client.updateTask({
     id,
-    data: task
+    data: {
+      files,
+      ...task
+    }
   });
 };
 
 // src/task/queue.ts
-import path3 from "path";
+import path4 from "path";
 import crypto from "crypto";
 import fs2 from "fs/promises";
 var queueTask = async (data) => {
@@ -3200,12 +3211,12 @@ function isTargetUrl(value2) {
 }
 async function downloadFile(url, filename) {
   const comfyuiPath = COMFYUI_DIR;
-  const inputDir = path3.join(comfyuiPath, "input");
+  const inputDir = path4.join(comfyuiPath, "input");
   await fs2.mkdir(inputDir, { recursive: true });
   const resp = await fetch(url);
   const arrayBuffer = await resp.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  await fs2.writeFile(path3.join(inputDir, filename), buffer);
+  await fs2.writeFile(path4.join(inputDir, filename), buffer);
 }
 async function downloadAndReplaceUrl(url) {
   if (!isTargetUrl(url)) {
@@ -3213,8 +3224,8 @@ async function downloadAndReplaceUrl(url) {
     return url;
   }
   const originalFilename = url.split("/").pop() || "input";
-  const extension = path3.extname(originalFilename);
-  const baseName = path3.basename(originalFilename, extension);
+  const extension = path4.extname(originalFilename);
+  const baseName = path4.basename(originalFilename, extension);
   const uniqueId = crypto.randomUUID().substring(0, 8);
   const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
   console.log("Downloading file", {
