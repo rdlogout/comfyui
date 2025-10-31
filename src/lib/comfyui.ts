@@ -26,6 +26,7 @@ comfyApi.on("execution_success", async (e) => {
 	updateTaskByPromptId(prompt_id, {
 		status: "completed",
 		ended_at: new Date().toISOString(),
+		files: JSON.stringify(files),
 	});
 	const task = getTaskByPromptId(prompt_id);
 	await syncTaskStatus(task!.id);

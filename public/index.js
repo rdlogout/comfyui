@@ -3034,6 +3034,7 @@ var onStart2 = (e) => {
 // src/task/status.ts
 import * as path2 from "path";
 var syncTaskStatus = async (id) => {
+  console.log("syncing task status", id);
   const task = getTask(id);
   if (!task) {
     console.log("task not found", id);
@@ -3043,6 +3044,8 @@ var syncTaskStatus = async (id) => {
     console.log("task not queued", id);
     return;
   }
+  if (task.files)
+    task.files = JSON.parse(task.files);
   const files = Array.isArray(task.files) ? task.files.map((file) => {
     const localFile = Bun.file(path2.join(COMFYUI_DIR, file));
     return new File([localFile], localFile.name, {
@@ -3211,7 +3214,8 @@ comfyApi2.on("execution_success", async (e) => {
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/")).filter(Boolean);
   updateTaskByPromptId(prompt_id, {
     status: "completed",
-    ended_at: new Date().toISOString()
+    ended_at: new Date().toISOString(),
+    files: JSON.stringify(files)
   });
   const task = getTaskByPromptId(prompt_id);
   await syncTaskStatus(task.id);

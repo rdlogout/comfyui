@@ -4,6 +4,7 @@ import * as path from "path";
 import { getTask } from "src/lib/db";
 
 export const syncTaskStatus = async (id: string) => {
+	console.log("syncing task status", id);
 	const task = getTask(id);
 	if (!task) {
 		console.log("task not found", id);
@@ -13,6 +14,7 @@ export const syncTaskStatus = async (id: string) => {
 		console.log("task not queued", id);
 		return;
 	}
+	if (task.files) task.files = JSON.parse(task.files);
 
 	const files = Array.isArray(task.files)
 		? task.files.map((file) => {
