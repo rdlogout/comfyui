@@ -13,7 +13,7 @@ export const syncDependencies = async (dependencies: Dependency[]) => {
 	console.log("Syncing dependencies");
 	console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
 	const customNodes = dependencies.filter((d) => d.type === "custom_node");
-	const models = dependencies.filter((d) => d.type === "model");
+	const models = []; // dependencies.filter((d) => d.type === "model");
 
 	// console.log(customNodes, models);
 
