@@ -2932,13 +2932,12 @@ var comfyApi = new x(COMFYUI_URL).init(20, 1000);
 // src/dependency/index.ts
 var syncDependencies = async (dependencies) => {
   console.log("Syncing dependencies");
-  console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
+  console.table(dependencies.map((s) => ({ type: s.type, output: s.output || s.url })));
   const customNodes = dependencies.filter((d) => d.type === "custom_node");
   const models = dependencies.filter((d) => d.type === "model");
   const nodePromises = customNodes.map(async (node) => {
     console.log(`Installing custom node from ${node.url}`);
     const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
-    console.log({ resp });
     return { id: node.id, type: "custom_node", success: resp, message: "All Good" };
   });
   const modelPromises = models.map(async (model) => {
@@ -2947,7 +2946,6 @@ var syncDependencies = async (dependencies) => {
   });
   const results = await Promise.all([...nodePromises, ...modelPromises]);
   const successResult = results.filter((r) => r.success);
-  console.log({ successResult, results });
   console.log("Successfully synced dependencies:");
   console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
   await api.client.updateDependencies(successResult);
