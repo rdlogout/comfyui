@@ -3056,6 +3056,7 @@ var queueTask = async (data) => {
     return;
   }
   const resp = await comfyApi.appendPrompt(prompt);
+  console.log(resp);
   const prompt_id = resp.prompt_id;
   if (prompt_id) {
     const success = updatePromptId(task_id, prompt_id);
