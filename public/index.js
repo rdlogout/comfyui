@@ -2924,7 +2924,7 @@ var syncDependencies = async (dependencies) => {
   console.log("Syncing dependencies");
   console.table(dependencies.map((s) => ({ type: s.type, output: s.output })));
   const customNodes = dependencies.filter((d) => d.type === "custom_node");
-  const models = dependencies.filter((d) => d.type === "model");
+  const models = [];
   const nodePromises = customNodes.map(async (node) => {
     console.log(`Installing custom node from ${node.url}`);
     const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
