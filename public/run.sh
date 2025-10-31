@@ -202,6 +202,75 @@ check_and_clone_comfyui() {
     echo "ComfyUI setup complete"
 }
 
+# Function to check and clone ComfyUI Manager
+check_and_clone_comfyui_manager() {
+    echo "=== Checking ComfyUI Manager Installation ==="
+    
+    local manager_dir="$COMFYUI_DIR/custom_nodes/ComfyUI-Manager"
+    
+    if [ -d "$manager_dir" ]; then
+        echo "ComfyUI Manager directory found at $manager_dir"
+        if [ -f "$manager_dir/__init__.py" ]; then
+            echo "ComfyUI Manager __init__.py found, installation appears complete"
+        else
+            echo "ComfyUI Manager directory exists but __init__.py missing, removing and re-cloning..."
+            rm -rf "$manager_dir"
+            echo "Cloning ComfyUI Manager..."
+            git clone https://github.com/ltdrdata/ComfyUI-Manager.git "$manager_dir"
+        fi
+    else
+        echo "ComfyUI Manager directory not found, cloning..."
+        git clone https://github.com/ltdrdata/ComfyUI-Manager.git "$manager_dir"
+    fi
+    
+    echo "ComfyUI Manager setup complete"
+}
+
+# Function to configure ComfyUI Manager security level
+configure_comfyui_manager_security() {
+    echo "=== Configuring ComfyUI Manager Security Level ==="
+    
+    local config_file="$COMFYUI_DIR/user/default/ComfyUI-Manager/config.ini"
+    local config_dir="$(dirname "$config_file")"
+    
+    # Create the directory if it doesn't exist
+    if [ ! -d "$config_dir" ]; then
+        echo "Creating ComfyUI Manager config directory: $config_dir"
+        mkdir -p "$config_dir"
+    fi
+    
+    # Check if config file exists
+    if [ -f "$config_file" ]; then
+        echo "Config file found at $config_file"
+        # Check current security level
+        if grep -q "^security_level[[:space:]]*=[[:space:]]*weak" "$config_file"; then
+            echo "Security level is already set to 'weak', no changes needed"
+        elif grep -q "^security_level[[:space:]]*=[[:space:]]*normal" "$config_file"; then
+            echo "Security level is 'normal', changing to 'weak'"
+            sed -i 's/^security_level[[:space:]]*=[[:space:]]*normal/security_level = weak/' "$config_file"
+            echo "Security level updated to 'weak'"
+        else
+            echo "Security level not found or set to other value, setting to 'weak'"
+            # Add or update the security level line
+            if grep -q "^security_level" "$config_file"; then
+                sed -i 's/^security_level.*/security_level = weak/' "$config_file"
+            else
+                echo "security_level = weak" >> "$config_file"
+            fi
+            echo "Security level set to 'weak'"
+        fi
+    else
+        echo "Config file not found, creating with security_level = weak"
+        cat > "$config_file" << 'EOF'
+[DEFAULT]
+security_level = weak
+EOF
+        echo "Created config file with security level set to 'weak'"
+    fi
+    
+    echo "ComfyUI Manager security configuration complete"
+}
+
 # Function to source or create and activate venv
 setup_venv() {
     echo "=== Setting up Python Virtual Environment ==="
@@ -369,6 +438,10 @@ install_bun
 check_and_clone_comfyui
 setup_venv
 check_and_install_deps
+
+# ComfyUI Manager setup functions
+check_and_clone_comfyui_manager
+configure_comfyui_manager_security
 
 # Copy node.py to custom_nodes folder
 copy_node_to_custom_nodes
