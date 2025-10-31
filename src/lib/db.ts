@@ -88,18 +88,7 @@ export const updateTask = (
 	// Try to update existing record
 	const updateFields = fields.map((field) => `${field} = ?`).join(", ");
 	const updateResult = db.run(`UPDATE tasks SET ${updateFields} WHERE id = ?`, [...values, id]);
-
-	// If no rows were updated, insert new record
-	if (updateResult.changes === 0) {
-		fields.push("id");
-		values.push(id);
-		placeholders.push("?");
-
-		const insertFields = fields.join(", ");
-		const insertPlaceholders = placeholders.join(", ");
-
-		db.run(`INSERT INTO prompts (${insertFields}) VALUES (${insertPlaceholders})`, values);
-	}
+	console.log({ updateResult });
 };
 
 export const getTask = (id: string): Task => {

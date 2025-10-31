@@ -2998,14 +2998,7 @@ var updateTask = (id, obj) => {
   values.push("CURRENT_TIMESTAMP");
   const updateFields = fields.map((field) => `${field} = ?`).join(", ");
   const updateResult = db.run(`UPDATE tasks SET ${updateFields} WHERE id = ?`, [...values, id]);
-  if (updateResult.changes === 0) {
-    fields.push("id");
-    values.push(id);
-    placeholders.push("?");
-    const insertFields = fields.join(", ");
-    const insertPlaceholders = placeholders.join(", ");
-    db.run(`INSERT INTO prompts (${insertFields}) VALUES (${insertPlaceholders})`, values);
-  }
+  console.log({ updateResult });
 };
 var getTask = (id) => {
   let task = db.query("SELECT * FROM tasks WHERE id = ?").get(id);
