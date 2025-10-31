@@ -2937,7 +2937,8 @@ var syncDependencies = async (dependencies) => {
   });
   const results = await Promise.all([...nodePromises]);
   const successResult = results.filter((r) => r.success);
-  console.log("Successfully synced dependencies:", results);
+  console.log({ successResult, results });
+  console.log("Successfully synced dependencies:");
   console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
   await api.client.updateDependencies(successResult);
 };
