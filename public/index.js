@@ -2932,33 +2932,6 @@ if (typeof CustomEvent > "u")
     }
   };
 
-// src/lib/comfyui.ts
-var COMFYUI_URL = "http://localhost:8188";
-var COMFYUI_DIR = process.env.COMFYUI_DIR || path2.join(homedir2(), "ComfyUI");
-var comfyApi = new x(COMFYUI_URL).init(20, 1000);
-
-// src/dependency/index.ts
-var syncDependencies = async (dependencies) => {
-  console.log("Syncing dependencies");
-  console.table(dependencies.map((s) => ({ type: s.type, output: s.output || s.url })));
-  const customNodes = dependencies.filter((d) => d.type === "custom_node");
-  const models = dependencies.filter((d) => d.type === "model");
-  const nodePromises = customNodes.map(async (node) => {
-    console.log(`Installing custom node from ${node.url}`);
-    const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
-    return { id: node.id, type: "custom_node", success: resp, message: "All Good" };
-  });
-  const modelPromises = models.map(async (model) => {
-    const resp = await downloadModel(model.url, model.output);
-    return { id: model.id, type: "model", success: resp.success, message: resp.message };
-  });
-  const results = await Promise.all([...nodePromises, ...modelPromises]);
-  const successResult = results.filter((r) => r.success);
-  console.log("Successfully synced dependencies:");
-  console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
-  await api.client.updateDependencies(successResult);
-};
-
 // src/lib/db.ts
 import { Database } from "bun:sqlite";
 var db = new Database("comfyui.sqlite");
@@ -2981,6 +2954,16 @@ db.run(`
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)
 	`);
+var getTaskByPromptId = (prompt_id) => {
+  return db.query("SELECT * FROM tasks WHERE prompt_id = ?").get(prompt_id);
+};
+var updateTaskByPromptId = (prompt_id, data) => {
+  const task = getTaskByPromptId(prompt_id);
+  if (!task)
+    return false;
+  updateTask(task.id, data);
+  return true;
+};
 var updateTask = (id, obj) => {
   const fields = [];
   const values = [];
@@ -3017,6 +3000,71 @@ var updatePromptId = (id, prompt_id) => {
   updateTask(id, { prompt_id });
   console.log("task is updated with prompt id", id, prompt_id);
   return true;
+};
+
+// src/lib/events.ts
+var onProgress = (e) => {
+  const { prompt_id, max, value: value2, node } = e.detail;
+  const percentage = value2 / max * 100;
+  console.log(`Progress: ${percentage.toFixed(2)}% (${value2}/${max})`);
+  updateTaskByPromptId(prompt_id, {
+    progress: percentage,
+    active_node_id: node || ""
+  });
+};
+var onError2 = (e) => {
+  const { prompt_id } = e.detail;
+  console.log(`Error: ${e.detail.exception_message}`);
+  updateTaskByPromptId(prompt_id, {
+    error: e.detail.exception_message,
+    status: "failed",
+    ended_at: new Date().toISOString()
+  });
+};
+var onStart2 = (e) => {
+  const { prompt_id } = e.detail;
+  console.log(`Start: ${prompt_id}`);
+  updateTaskByPromptId(prompt_id, {
+    status: "running",
+    started_at: new Date().toISOString(),
+    progress: 0
+  });
+};
+
+// src/lib/comfyui.ts
+var COMFYUI_URL = "http://localhost:8188";
+var COMFYUI_DIR = process.env.COMFYUI_DIR || path2.join(homedir2(), "ComfyUI");
+var comfyApi = new x(COMFYUI_URL).init(20, 1000);
+comfyApi.on("progress", onProgress);
+comfyApi.on("execution_error", onError2);
+comfyApi.on("execution_start", onStart2);
+comfyApi.on("execution_success", async (e) => {
+  const { prompt_id } = e.detail;
+  const history = await comfyApi.getHistory(prompt_id);
+  console.log({ history });
+  if (history) {}
+});
+
+// src/dependency/index.ts
+var syncDependencies = async (dependencies) => {
+  console.log("Syncing dependencies");
+  console.table(dependencies.map((s) => ({ type: s.type, output: s.output || s.url })));
+  const customNodes = dependencies.filter((d) => d.type === "custom_node");
+  const models = dependencies.filter((d) => d.type === "model");
+  const nodePromises = customNodes.map(async (node) => {
+    console.log(`Installing custom node from ${node.url}`);
+    const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
+    return { id: node.id, type: "custom_node", success: resp, message: "All Good" };
+  });
+  const modelPromises = models.map(async (model) => {
+    const resp = await downloadModel(model.url, model.output);
+    return { id: model.id, type: "model", success: resp.success, message: resp.message };
+  });
+  const results = await Promise.all([...nodePromises, ...modelPromises]);
+  const successResult = results.filter((r) => r.success);
+  console.log("Successfully synced dependencies:");
+  console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
+  await api.client.updateDependencies(successResult);
 };
 
 // src/task/status.ts

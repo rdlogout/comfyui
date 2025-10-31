@@ -49,6 +49,17 @@ export const insertTask = (id: string): boolean => {
 	return true;
 };
 
+const getTaskByPromptId = (prompt_id: string): Task | undefined => {
+	return db.query("SELECT * FROM tasks WHERE prompt_id = ?").get(prompt_id) as Task | undefined;
+};
+
+export const updateTaskByPromptId = (prompt_id: string, data: Omit<Task, "id">) => {
+	const task = getTaskByPromptId(prompt_id);
+	if (!task) return false;
+	updateTask(task.id, data);
+	return true;
+};
+
 export const updateTask = (
 	id: string,
 	obj: {
