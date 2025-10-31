@@ -3055,7 +3055,7 @@ var syncTaskStatus = async (id) => {
   console.log({ files });
   await api.client.updateTask({
     id,
-    files,
+    files: files.at(0),
     data: {
       status: task.status,
       ended_at: task.ended_at,
@@ -3211,7 +3211,15 @@ comfyApi2.on("execution_success", async (e) => {
   const { prompt_id } = e.detail;
   const history = await comfyApi2.getHistory(prompt_id);
   console.log({ history });
-  const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/")).filter(Boolean);
+  const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {
+    if (item.type === "temp") {
+      item.type = "output";
+      const tempPath = path4.join(COMFYUI_DIR, "temp", item.subfolder, item.filename);
+      const tempFile = Bun.file(tempPath);
+      Bun.write(path4.join(COMFYUI_DIR, "output", item.filename), tempFile);
+    }
+    return path4.join(item.type, item.subfolder, item.filename);
+  }).filter(Boolean);
   updateTaskByPromptId(prompt_id, {
     status: "completed",
     ended_at: new Date().toISOString(),

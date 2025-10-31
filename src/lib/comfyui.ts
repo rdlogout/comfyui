@@ -20,7 +20,16 @@ comfyApi.on("execution_success", async (e) => {
 	const files = Object.values(history?.outputs || {})
 		.map((output) => Object.values(output).flat())
 		.flat()
-		.map((item: any) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/"))
+		.map((item: any) => {
+			if (item.type === "temp") {
+				item.type = "output";
+				const tempPath = path.join(COMFYUI_DIR, "temp", item.subfolder, item.filename);
+				const tempFile = Bun.file(tempPath);
+				Bun.write(path.join(COMFYUI_DIR, "output", item.filename), tempFile);
+			}
+
+			return path.join(item.type, item.subfolder, item.filename);
+		})
 		.filter(Boolean);
 	// console.log({ files });
 	updateTaskByPromptId(prompt_id, {

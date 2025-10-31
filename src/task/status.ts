@@ -32,7 +32,7 @@ export const syncTaskStatus = async (id: string) => {
 
 	await api.client.updateTask({
 		id,
-		files,
+		files: files.at(0),
 		data: {
 			status: task.status,
 			ended_at: task.ended_at,
