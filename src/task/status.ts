@@ -21,7 +21,8 @@ export const syncTaskStatus = async (id: string) => {
 				task.files.map(async (file) => {
 					const localFile = Bun.file(path.join(COMFYUI_DIR, file));
 					// return localFile;
-					return new File([await localFile.arrayBuffer()], localFile.name!, {
+					const filename = localFile.name?.split("/").pop() || localFile.name;
+					return new File([await localFile.arrayBuffer()], filename!, {
 						type: localFile.type,
 					});
 				})
@@ -32,16 +33,14 @@ export const syncTaskStatus = async (id: string) => {
 
 	await api.client.updateTask({
 		id,
-		files: files.at(0),
-		data: {
-			status: task.status,
-			ended_at: task.ended_at,
-			queued_at: task.queued_at,
-			started_at: task.started_at,
-			error: task.error,
-			active_node_id: task.active_node_id,
-			progress: task.progress,
-			logs: task.logs,
-		},
+		files: files,
+		status: task.status,
+		ended_at: task.ended_at,
+		queued_at: task.queued_at,
+		started_at: task.started_at,
+		error: task.error,
+		active_node_id: task.active_node_id,
+		progress: task.progress,
+		logs: task.logs,
 	});
 };

@@ -38,5 +38,5 @@ comfyApi.on("execution_success", async (e) => {
 		files: JSON.stringify(files),
 	});
 	const task = getTaskByPromptId(prompt_id);
-	await syncTaskStatus(task!.id);
+	if (task) await syncTaskStatus(task.id);
 });
