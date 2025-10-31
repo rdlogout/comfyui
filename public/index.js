@@ -3078,13 +3078,6 @@ var queueTask = async (data) => {
   const { id: task_id } = data;
   const prompt = await getWorkflow(data.prompt);
   const task = getTask(task_id);
-  if (task.prompt_id) {
-    const history = await comfyApi2.getHistory(task.prompt_id);
-    if (history) {
-      console.log("task already has prompt id", task_id, task.prompt_id);
-      return;
-    }
-  }
   const resp = await comfyApi2.appendPrompt(prompt);
   console.log(resp);
   const prompt_id = resp.prompt_id;
