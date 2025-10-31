@@ -9,8 +9,18 @@ export const BASE_URL = `http${DEV ? "" : "s"}://${DOMAIN}`;
 export const WS_URL = `ws${DEV ? "" : "s"}://${DOMAIN}`;
 console.table({ DEV, machineId, DOMAIN });
 
+// Configure fetch to handle SSL certificate issues
+const customFetch = (url: string, options?: RequestInit) => {
+	return fetch(url, {
+		...options,
+		// @ts-ignore - Node.js specific option to handle SSL certificates
+		rejectUnauthorized: false,
+	});
+};
+
 const link = new RPCLink({
 	url: `${BASE_URL}/rpc`,
+	fetch: customFetch,
 	headers: {
 		"x-machine-id": machineId,
 	},

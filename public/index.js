@@ -2390,8 +2390,15 @@ var DOMAIN = DEV ? `localhost:8787` : `fussion.studio`;
 var BASE_URL = `http${DEV ? "" : "s"}://${DOMAIN}`;
 var WS_URL = `ws${DEV ? "" : "s"}://${DOMAIN}`;
 console.table({ DEV, machineId, DOMAIN });
+var customFetch = (url, options) => {
+  return fetch(url, {
+    ...options,
+    rejectUnauthorized: false
+  });
+};
 var link = new RPCLink({
   url: `${BASE_URL}/rpc`,
+  fetch: customFetch,
   headers: {
     "x-machine-id": machineId
   }
