@@ -2,7 +2,7 @@ import { api } from "src/lib/api";
 import { getTask } from "src/lib/db";
 
 export const syncTaskStatus = async (id: string) => {
-	const task = await getTask(id);
+	const task = getTask(id);
 	if (!task) {
 		console.log("task not found", id);
 		return;

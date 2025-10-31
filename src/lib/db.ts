@@ -102,7 +102,11 @@ export const getTask = (id: string): Task => {
 
 export const updatePromptId = (id: string, prompt_id: string): boolean => {
 	const task = getTask(id);
-	if (task.prompt_id) return false;
+	if (task.prompt_id) {
+		console.log("task already has prompt id", id, task.prompt_id);
+		return false;
+	}
 	updateTask(id, { prompt_id });
+	console.log("task is updated with prompt id", id, prompt_id);
 	return true;
 };

@@ -3010,15 +3010,18 @@ var getTask = (id) => {
 };
 var updatePromptId = (id, prompt_id) => {
   const task = getTask(id);
-  if (task.prompt_id)
+  if (task.prompt_id) {
+    console.log("task already has prompt id", id, task.prompt_id);
     return false;
+  }
   updateTask(id, { prompt_id });
+  console.log("task is updated with prompt id", id, prompt_id);
   return true;
 };
 
 // src/task/status.ts
 var syncTaskStatus = async (id) => {
-  const task = await getTask(id);
+  const task = getTask(id);
   if (!task) {
     console.log("task not found", id);
     return;
