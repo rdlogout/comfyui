@@ -30,8 +30,15 @@ export const syncTaskStatus = async (id: string) => {
 	await api.client.updateTask({
 		id,
 		data: {
+			status: task.status,
+			ended_at: task.ended_at,
+			queued_at: task.queued_at,
+			started_at: task.started_at,
+			error: task.error,
+			active_node_id: task.active_node_id,
+			progress: task.progress,
+			logs: task.logs,
 			files,
-			...task,
 		},
 	});
 };

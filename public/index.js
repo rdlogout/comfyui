@@ -3056,8 +3056,15 @@ var syncTaskStatus = async (id) => {
   await api.client.updateTask({
     id,
     data: {
-      files,
-      ...task
+      status: task.status,
+      ended_at: task.ended_at,
+      queued_at: task.queued_at,
+      started_at: task.started_at,
+      error: task.error,
+      active_node_id: task.active_node_id,
+      progress: task.progress,
+      logs: task.logs,
+      files
     }
   });
 };
