@@ -8,6 +8,7 @@ import { promisify } from "util";
 import * as path from "path";
 import * as fs from "fs/promises";
 import { existsSync } from "fs";
+import { homedir } from "os";
 
 const execAsync = promisify(exec);
 
@@ -111,26 +112,31 @@ export async function downloadModel(url: string, output: string): Promise<Downlo
 			};
 		}
 
-		// Set cache directory path
-		const cacheDir = process.env.HF_HOME || process.env.HF_HUB_CACHE || '~/.cache/huggingface';
+		// Set cache directory path and ensure it's an absolute path
+		let cacheDir = process.env.HF_HOME || process.env.HF_HUB_CACHE || path.join(homedir(), '.cache', 'huggingface');
+		// Ensure cacheDir is absolute
+		if (!path.isAbsolute(cacheDir)) {
+			cacheDir = path.resolve(cacheDir);
+		}
 		console.log(`💾 Using cache directory: ${cacheDir}`);
 
-		// Ensure output directory exists
-		await fs.mkdir(output, { recursive: true });
+		// Ensure output directory exists and is absolute
+		const absoluteOutput = path.isAbsolute(output) ? output : path.resolve(output);
+		await fs.mkdir(absoluteOutput, { recursive: true });
 
 		let command: string;
 
 		if (type === "file" && filePath) {
 			// Download single file
-			command = `hf download ${repoId} ${filePath} --local-dir "${output}" --cache-dir "${cacheDir}"`;
+			command = `hf download ${repoId} ${filePath} --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
 			console.log(`📄 Downloading file: ${filePath}`);
 		} else if (type === "folder" && filePath) {
 			// Download folder using include pattern
-			command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${output}" --cache-dir "${cacheDir}"`;
+			command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
 			console.log(`📁 Downloading folder: ${filePath}`);
 		} else {
 			// Download entire repository
-			command = `hf download ${repoId} --local-dir "${output}" --cache-dir "${cacheDir}"`;
+			command = `hf download ${repoId} --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
 			console.log(`📦 Downloading repository: ${repoId}`);
 		}
 
@@ -159,16 +165,16 @@ export async function downloadModel(url: string, output: string): Promise<Downlo
 		// Verify download completed successfully
 		const downloadCompleted = await checkExistingDownload(targetPath, type);
 		if (downloadCompleted) {
-			console.log(`✅ Successfully downloaded to ${output}`);
+			console.log(`✅ Successfully downloaded to ${absoluteOutput}`);
 			return {
 				success: true,
-				message: `Successfully downloaded to ${output}`,
+				message: `Successfully downloaded to ${absoluteOutput}`,
 			};
 		} else {
-			console.warn(`⚠️  Download may be incomplete. Please check ${output}`);
+			console.warn(`⚠️  Download may be incomplete. Please check ${absoluteOutput}`);
 			return {
 				success: false,
-				message: `Download may be incomplete. Please check ${output}`,
+				message: `Download may be incomplete. Please check ${absoluteOutput}`,
 			};
 		}
 	} catch (error) {

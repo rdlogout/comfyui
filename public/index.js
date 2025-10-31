@@ -545,8 +545,10 @@ var reconnecting_websocket_mjs_default = ReconnectingWebSocket;
 // src/dependency/model.ts
 import { exec } from "child_process";
 import { promisify } from "util";
+import * as path from "path";
 import * as fs from "fs/promises";
 import { existsSync } from "fs";
+import { homedir } from "os";
 var execAsync = promisify(exec);
 function parseHuggingFaceUrl(url) {
   const cleanUrl = url.replace(/\/$/, "");
@@ -601,18 +603,22 @@ async function downloadModel(url, output) {
         message: `File already exists at ${targetPath}`
       };
     }
-    const cacheDir = process.env.HF_HOME || process.env.HF_HUB_CACHE || "~/.cache/huggingface";
+    let cacheDir = process.env.HF_HOME || process.env.HF_HUB_CACHE || path.join(homedir(), ".cache", "huggingface");
+    if (!path.isAbsolute(cacheDir)) {
+      cacheDir = path.resolve(cacheDir);
+    }
     console.log(`\uD83D\uDCBE Using cache directory: ${cacheDir}`);
-    await fs.mkdir(output, { recursive: true });
+    const absoluteOutput = path.isAbsolute(output) ? output : path.resolve(output);
+    await fs.mkdir(absoluteOutput, { recursive: true });
     let command;
     if (type === "file" && filePath) {
-      command = `hf download ${repoId} ${filePath} --local-dir "${output}" --cache-dir "${cacheDir}"`;
+      command = `hf download ${repoId} ${filePath} --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCC4 Downloading file: ${filePath}`);
     } else if (type === "folder" && filePath) {
-      command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${output}" --cache-dir "${cacheDir}"`;
+      command = `hf download ${repoId} --include "${filePath}/*" --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCC1 Downloading folder: ${filePath}`);
     } else {
-      command = `hf download ${repoId} --local-dir "${output}" --cache-dir "${cacheDir}"`;
+      command = `hf download ${repoId} --local-dir "${absoluteOutput}" --cache-dir "${cacheDir}"`;
       console.log(`\uD83D\uDCE6 Downloading repository: ${repoId}`);
     }
     console.log(`\uD83D\uDD04 Executing: ${command}`);
@@ -633,16 +639,16 @@ async function downloadModel(url, output) {
     }
     const downloadCompleted = await checkExistingDownload(targetPath, type);
     if (downloadCompleted) {
-      console.log(`\u2705 Successfully downloaded to ${output}`);
+      console.log(`\u2705 Successfully downloaded to ${absoluteOutput}`);
       return {
         success: true,
-        message: `Successfully downloaded to ${output}`
+        message: `Successfully downloaded to ${absoluteOutput}`
       };
     } else {
-      console.warn(`\u26A0\uFE0F  Download may be incomplete. Please check ${output}`);
+      console.warn(`\u26A0\uFE0F  Download may be incomplete. Please check ${absoluteOutput}`);
       return {
         success: false,
-        message: `Download may be incomplete. Please check ${output}`
+        message: `Download may be incomplete. Please check ${absoluteOutput}`
       };
     }
   } catch (error) {
@@ -911,8 +917,8 @@ class EventPublisher {
       if (bufferedEvents.length > 0) {
         return { done: false, value: bufferedEvents.shift() };
       }
-      return new Promise((resolve, reject) => {
-        pullResolvers.push([resolve, reject]);
+      return new Promise((resolve2, reject) => {
+        pullResolvers.push([resolve2, reject]);
       });
     }, async () => {
       unsubscribe();
@@ -1435,9 +1441,9 @@ function resolveFriendlyClientOptions(options) {
   };
 }
 function createORPCClient(link, options = {}) {
-  const path = options.path ?? [];
+  const path2 = options.path ?? [];
   const procedureClient = async (...[input, options2 = {}]) => {
-    return await link.call(path, input, resolveFriendlyClientOptions(options2));
+    return await link.call(path2, input, resolveFriendlyClientOptions(options2));
   };
   const recursive = new Proxy(procedureClient, {
     get(target, key) {
@@ -1446,7 +1452,7 @@ function createORPCClient(link, options = {}) {
       }
       return createORPCClient(link, {
         ...options,
-        path: [...path, key]
+        path: [...path2, key]
       });
     }
   });
@@ -1733,25 +1739,25 @@ class StandardLink {
   }
   interceptors;
   clientInterceptors;
-  call(path, input, options) {
-    return runWithSpan({ name: `${ORPC_NAME}.${path.join("/")}`, signal: options.signal }, (span) => {
+  call(path2, input, options) {
+    return runWithSpan({ name: `${ORPC_NAME}.${path2.join("/")}`, signal: options.signal }, (span) => {
       span?.setAttribute("rpc.system", ORPC_NAME);
-      span?.setAttribute("rpc.method", path.join("."));
+      span?.setAttribute("rpc.method", path2.join("."));
       if (isAsyncIteratorObject(input)) {
         input = asyncIteratorWithSpan({ name: "consume_event_iterator_input", signal: options.signal }, input);
       }
-      return intercept(this.interceptors, { ...options, path, input }, async ({ path: path2, input: input2, ...options2 }) => {
+      return intercept(this.interceptors, { ...options, path: path2, input }, async ({ path: path22, input: input2, ...options2 }) => {
         const otelConfig = getGlobalOtelConfig();
         let otelContext;
         const currentSpan = otelConfig?.trace.getActiveSpan() ?? span;
         if (currentSpan && otelConfig) {
           otelContext = otelConfig?.trace.setSpan(otelConfig.context.active(), currentSpan);
         }
-        const request = await runWithSpan({ name: "encode_request", context: otelContext }, () => this.codec.encode(path2, input2, options2));
-        const response = await intercept(this.clientInterceptors, { ...options2, input: input2, path: path2, request }, ({ input: input3, path: path3, request: request2, ...options3 }) => {
+        const request = await runWithSpan({ name: "encode_request", context: otelContext }, () => this.codec.encode(path22, input2, options2));
+        const response = await intercept(this.clientInterceptors, { ...options2, input: input2, path: path22, request }, ({ input: input3, path: path3, request: request2, ...options3 }) => {
           return runWithSpan({ name: "send_request", signal: options3.signal, context: otelContext }, () => this.sender.call(request2, options3, path3, input3));
         });
-        const output = await runWithSpan({ name: "decode_response", context: otelContext }, () => this.codec.decode(response, options2, path2, input2));
+        const output = await runWithSpan({ name: "decode_response", context: otelContext }, () => this.codec.decode(response, options2, path22, input2));
         if (isAsyncIteratorObject(output)) {
           return asyncIteratorWithSpan({ name: "consume_event_iterator_output", signal: options2.signal }, output);
         }
@@ -1906,8 +1912,8 @@ class StandardRPCJsonSerializer {
     return ref.data;
   }
 }
-function toHttpPath(path) {
-  return `/${path.map(encodeURIComponent).join("/")}`;
+function toHttpPath(path2) {
+  return `/${path2.map(encodeURIComponent).join("/")}`;
 }
 function toStandardHeaders2(headers) {
   if (typeof headers.forEach === "function") {
@@ -1933,18 +1939,18 @@ class StandardRPCLinkCodec {
   fallbackMethod;
   expectedMethod;
   headers;
-  async encode(path, input, options) {
-    let headers = toStandardHeaders2(await value(this.headers, options, path, input));
+  async encode(path2, input, options) {
+    let headers = toStandardHeaders2(await value(this.headers, options, path2, input));
     if (options.lastEventId !== undefined) {
       headers = mergeStandardHeaders(headers, { "last-event-id": options.lastEventId });
     }
-    const expectedMethod = await value(this.expectedMethod, options, path, input);
-    const baseUrl = await value(this.baseUrl, options, path, input);
+    const expectedMethod = await value(this.expectedMethod, options, path2, input);
+    const baseUrl = await value(this.baseUrl, options, path2, input);
     const url = new URL(baseUrl);
-    url.pathname = `${url.pathname.replace(/\/$/, "")}${toHttpPath(path)}`;
+    url.pathname = `${url.pathname.replace(/\/$/, "")}${toHttpPath(path2)}`;
     const serialized = this.serializer.serialize(input);
     if (expectedMethod === "GET" && !(serialized instanceof FormData) && !isAsyncIteratorObject(serialized)) {
-      const maxUrlLength = await value(this.maxUrlLength, options, path, input);
+      const maxUrlLength = await value(this.maxUrlLength, options, path2, input);
       const getUrl = new URL(url);
       getUrl.searchParams.append("data", stringifyJSON(serialized));
       if (getUrl.toString().length <= maxUrlLength) {
@@ -2093,9 +2099,9 @@ class LinkFetchClient {
     this.toFetchRequestOptions = options;
     this.adapterInterceptors = toArray(options.adapterInterceptors);
   }
-  async call(standardRequest, options, path, input) {
+  async call(standardRequest, options, path2, input) {
     const request = toFetchRequest(standardRequest, this.toFetchRequestOptions);
-    const fetchResponse = await intercept(this.adapterInterceptors, { ...options, request, path, input, init: { redirect: "manual" } }, ({ request: request2, path: path2, input: input2, init, ...options2 }) => this.fetch(request2, init, options2, path2, input2));
+    const fetchResponse = await intercept(this.adapterInterceptors, { ...options, request, path: path2, input, init: { redirect: "manual" } }, ({ request: request2, path: path22, input: input2, init, ...options2 }) => this.fetch(request2, init, options2, path22, input2));
     const lazyResponse = toStandardLazyResponse(fetchResponse, { signal: request.signal });
     return lazyResponse;
   }
@@ -2129,6 +2135,10 @@ var link = new RPCLink({
   }
 });
 var api = createORPCClient(link);
+
+// src/lib/comfyui.ts
+import { homedir as homedir2 } from "os";
+import * as path2 from "path";
 
 // node_modules/@saintno/comfyui-sdk/build/index.esm.js
 import u from "ws";
@@ -2916,7 +2926,7 @@ if (typeof CustomEvent > "u")
 
 // src/lib/comfyui.ts
 var COMFYUI_URL = "http://localhost:8188";
-var COMFYUI_DIR = process.env.COMFYUI_DIR || `${process.env.HOME}/ComfyUI`;
+var COMFYUI_DIR = process.env.COMFYUI_DIR || path2.join(homedir2(), "ComfyUI");
 var comfyApi = new x(COMFYUI_URL).init(20, 1000);
 
 // src/dependency/index.ts
@@ -3028,7 +3038,7 @@ var syncTaskStatus = async (id) => {
 };
 
 // src/task/queue.ts
-import path from "path";
+import path3 from "path";
 import crypto from "crypto";
 import fs2 from "fs/promises";
 var queueTask = async (data) => {
@@ -3135,12 +3145,12 @@ function isTargetUrl(value2) {
 }
 async function downloadFile(url, filename) {
   const comfyuiPath = COMFYUI_DIR;
-  const inputDir = path.join(comfyuiPath, "input");
+  const inputDir = path3.join(comfyuiPath, "input");
   await fs2.mkdir(inputDir, { recursive: true });
   const resp = await fetch(url);
   const arrayBuffer = await resp.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  await fs2.writeFile(path.join(inputDir, filename), buffer);
+  await fs2.writeFile(path3.join(inputDir, filename), buffer);
 }
 async function downloadAndReplaceUrl(url) {
   if (!isTargetUrl(url)) {
@@ -3148,8 +3158,8 @@ async function downloadAndReplaceUrl(url) {
     return url;
   }
   const originalFilename = url.split("/").pop() || "input";
-  const extension = path.extname(originalFilename);
-  const baseName = path.basename(originalFilename, extension);
+  const extension = path3.extname(originalFilename);
+  const baseName = path3.basename(originalFilename, extension);
   const uniqueId = crypto.randomUUID().substring(0, 8);
   const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
   console.log("Downloading file", {
