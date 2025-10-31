@@ -15,8 +15,11 @@ comfyApi.on("execution_success", async (e) => {
 	const { prompt_id } = e.detail;
 	const history = await comfyApi.getHistory(prompt_id);
 	console.log({ history });
-	if (history) {
-	}
+	const files = Object.values(history?.outputs || {})
+		.map((output) => Object.values(output).flat())
+		.flat()
+		.filter((item: any) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/"));
+	console.log({ files });
 	// updateTaskByPromptId(prompt_id, {
 	//     status: "completed",
 	//     ended_at: new Date().toISOString(),

@@ -3042,7 +3042,8 @@ comfyApi.on("execution_success", async (e) => {
   const { prompt_id } = e.detail;
   const history = await comfyApi.getHistory(prompt_id);
   console.log({ history });
-  if (history) {}
+  const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().filter((item) => [item.type, item.subfolder, item.filename].filter(Boolean).join("/"));
+  console.log({ files });
 });
 
 // src/dependency/index.ts
@@ -3096,8 +3097,11 @@ var queueTask = async (data) => {
   const prompt = await getWorkflow(data.prompt);
   const task = getTask(task_id);
   if (task.prompt_id) {
-    console.log("task already has prompt id", task_id, task.prompt_id);
-    return;
+    const history = await comfyApi.getHistory(task.prompt_id);
+    if (history) {
+      console.log("task already has prompt id", task_id, task.prompt_id);
+      return;
+    }
   }
   const resp = await comfyApi.appendPrompt(prompt);
   console.log(resp);
