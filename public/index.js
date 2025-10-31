@@ -2997,7 +2997,7 @@ var updateTask = (id, obj) => {
   fields.push("updated_at");
   values.push("CURRENT_TIMESTAMP");
   const updateFields = fields.map((field) => `${field} = ?`).join(", ");
-  const updateResult = db.run(`UPDATE prompts SET ${updateFields} WHERE id = ?`, [...values, id]);
+  const updateResult = db.run(`UPDATE tasks SET ${updateFields} WHERE id = ?`, [...values, id]);
   if (updateResult.changes === 0) {
     fields.push("id");
     values.push(id);

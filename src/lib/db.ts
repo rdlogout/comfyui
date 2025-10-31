@@ -87,7 +87,7 @@ export const updateTask = (
 
 	// Try to update existing record
 	const updateFields = fields.map((field) => `${field} = ?`).join(", ");
-	const updateResult = db.run(`UPDATE prompts SET ${updateFields} WHERE id = ?`, [...values, id]);
+	const updateResult = db.run(`UPDATE tasks SET ${updateFields} WHERE id = ?`, [...values, id]);
 
 	// If no rows were updated, insert new record
 	if (updateResult.changes === 0) {
