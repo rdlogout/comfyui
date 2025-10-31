@@ -3248,10 +3248,10 @@ backendSocket.onopen = () => {
   console.log("Connected to ComfyUI backend");
 };
 backendSocket.onerror = (e) => {
-  console.error("Error in ComfyUI backend connection:", e);
+  console.error("Error in ComfyUI backend connection:", e.message);
 };
 backendSocket.onclose = (e) => {
-  console.log("Disconnected from ComfyUI backend:", e);
+  console.error("Disconnected from ComfyUI backend:", e.message);
 };
 backendSocket.onmessage = (e) => {
   try {
