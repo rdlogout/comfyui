@@ -49,7 +49,7 @@ export const insertTask = (id: string): boolean => {
 	return true;
 };
 
-const getTaskByPromptId = (prompt_id: string): Task | undefined => {
+export const getTaskByPromptId = (prompt_id: string): Task | undefined => {
 	return db.query("SELECT * FROM tasks WHERE prompt_id = ?").get(prompt_id) as Task | undefined;
 };
 
@@ -94,7 +94,7 @@ export const updateTask = (
 
 	// Add updated_at
 	fields.push("updated_at");
-	values.push("CURRENT_TIMESTAMP");
+	values.push(new Date().toISOString());
 
 	// Try to update existing record
 	const updateFields = fields.map((field) => `${field} = ?`).join(", ");

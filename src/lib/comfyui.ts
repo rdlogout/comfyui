@@ -6,7 +6,8 @@ export const COMFYUI_DIR = process.env.COMFYUI_DIR || path.join(homedir(), "Comf
 
 import { ComfyApi } from "@saintno/comfyui-sdk";
 import { onError, onProgress, onStart, onSuccess } from "./events";
-import { updateTaskByPromptId } from "./db";
+import { getTaskByPromptId, updateTaskByPromptId } from "./db";
+import { syncTaskStatus } from "src/task";
 export const comfyApi = new ComfyApi(COMFYUI_URL).init(20, 1000);
 
 comfyApi.on("progress", onProgress);
@@ -26,4 +27,6 @@ comfyApi.on("execution_success", async (e) => {
 		status: "completed",
 		ended_at: new Date().toISOString(),
 	});
+	const task = getTaskByPromptId(prompt_id);
+	await syncTaskStatus(task!.id);
 });
