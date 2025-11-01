@@ -1,7 +1,9 @@
 import { Database } from "bun:sqlite";
 import * as path from "path";
 import { COMFYUI_DIR } from "./config";
+console.log({ COMFYUI_DIR });
 const dbPath = path.join(COMFYUI_DIR, "comfyui.sqlite");
+console.log({ dbPath });
 const db = new Database(dbPath);
 
 type Task = {

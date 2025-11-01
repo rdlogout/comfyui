@@ -2940,7 +2940,9 @@ if (typeof CustomEvent > "u")
 // src/lib/db.ts
 import { Database } from "bun:sqlite";
 import * as path3 from "path";
+console.log({ COMFYUI_DIR });
 var dbPath = path3.join(COMFYUI_DIR, "comfyui.sqlite");
+console.log({ dbPath });
 var db = new Database(dbPath);
 db.run(`
 		CREATE TABLE IF NOT EXISTS tasks (
