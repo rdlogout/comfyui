@@ -8,7 +8,7 @@ import * as path from "path";
 export const onProgress = (e: CustomEvent<TProgress>) => {
 	const { prompt_id, max, value, node } = e.detail;
 	const percentage = (value / max) * 100;
-	console.log(`Progress: ${percentage.toFixed(2)}% (${value}/${max})`);
+	// console.log(`Progress: ${percentage.toFixed(2)}% (${value}/${max})`);
 	taskDB.updateByPromptId(prompt_id, {
 		progress: percentage,
 		active_node_id: node || "",
@@ -27,7 +27,7 @@ export const onError = (e: CustomEvent<TExecutionError>) => {
 
 export const onStart = (e: CustomEvent<TExecution>) => {
 	const { prompt_id } = e.detail;
-	console.log(`Start: ${prompt_id}`);
+	// console.log(`Start: ${prompt_id}`);
 	taskDB.updateByPromptId(prompt_id, {
 		status: "running",
 		started_at: new Date().toISOString(),
@@ -38,7 +38,7 @@ export const onStart = (e: CustomEvent<TExecution>) => {
 export const onSuccess = async (e: CustomEvent<TExecution>) => {
 	const { prompt_id } = e.detail;
 	const history = await comfyApi.getHistory(prompt_id);
-	console.log({ history });
+	// console.log({ history });
 	const files = Object.values(history?.outputs || {})
 		.map((output) => Object.values(output).flat())
 		.flat()

@@ -3217,7 +3217,6 @@ import * as path5 from "path";
 var onProgress = (e) => {
   const { prompt_id, max, value: value2, node } = e.detail;
   const percentage = value2 / max * 100;
-  console.log(`Progress: ${percentage.toFixed(2)}% (${value2}/${max})`);
   taskDB.updateByPromptId(prompt_id, {
     progress: percentage,
     active_node_id: node || ""
@@ -3234,7 +3233,6 @@ var onError2 = (e) => {
 };
 var onStart2 = (e) => {
   const { prompt_id } = e.detail;
-  console.log(`Start: ${prompt_id}`);
   taskDB.updateByPromptId(prompt_id, {
     status: "running",
     started_at: new Date().toISOString(),
@@ -3244,7 +3242,6 @@ var onStart2 = (e) => {
 var onSuccess2 = async (e) => {
   const { prompt_id } = e.detail;
   const history = await comfyApi.getHistory(prompt_id);
-  console.log({ history });
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {
     if (item.type !== "output")
       Bun.write(path5.join(COMFYUI_DIR, "output", item.filename), Bun.file(path5.join(COMFYUI_DIR, "temp", item.subfolder, item.filename)));
