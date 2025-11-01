@@ -2146,7 +2146,7 @@ var api = createORPCClient(link);
 
 // src/lib/comfyui.ts
 import { homedir as homedir2 } from "os";
-import * as path4 from "path";
+import * as path5 from "path";
 
 // node_modules/@saintno/comfyui-sdk/build/index.esm.js
 import u from "ws";
@@ -2934,7 +2934,9 @@ if (typeof CustomEvent > "u")
 
 // src/lib/db.ts
 import { Database } from "bun:sqlite";
-var db = new Database("comfyui.sqlite");
+import * as path2 from "path";
+var dbPath = path2.join(COMFYUI_DIR, "comfyui.sqlite");
+var db = new Database(dbPath);
 db.run(`
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
@@ -3032,7 +3034,7 @@ var onStart2 = (e) => {
 };
 
 // src/task/status.ts
-import * as path2 from "path";
+import * as path3 from "path";
 var syncTaskStatus = async (id) => {
   console.log("syncing task status", id);
   const task = getTask(id);
@@ -3047,14 +3049,14 @@ var syncTaskStatus = async (id) => {
   if (task.files)
     task.files = JSON.parse(task.files);
   const files = Array.isArray(task.files) ? await Promise.all(task.files.map(async (file) => {
-    const localFile = Bun.file(path2.join(COMFYUI_DIR, file));
+    const localFile = Bun.file(path3.join(COMFYUI_DIR, file));
     const filename = localFile.name?.split("/").pop() || localFile.name;
     return new File([await localFile.arrayBuffer()], filename, {
       type: localFile.type
     });
   })) : [];
   console.log({ files });
-  await api.client.updateTask({
+  const dataToSend = {
     id,
     files,
     status: task.status,
@@ -3065,11 +3067,18 @@ var syncTaskStatus = async (id) => {
     active_node_id: task.active_node_id,
     progress: task.progress,
     logs: task.logs
-  });
+  };
+  let index = 0;
+  for (const file of files) {
+    dataToSend[`file_${index}`] = file;
+    index++;
+  }
+  console.log({ dataToSend });
+  await api.client.updateTask(dataToSend);
 };
 
 // src/task/queue.ts
-import path3 from "path";
+import path4 from "path";
 import crypto from "crypto";
 import fs2 from "fs/promises";
 var queueTask = async (data) => {
@@ -3173,12 +3182,12 @@ function isTargetUrl(value2) {
 }
 async function downloadFile(url, filename) {
   const comfyuiPath = COMFYUI_DIR;
-  const inputDir = path3.join(comfyuiPath, "input");
+  const inputDir = path4.join(comfyuiPath, "input");
   await fs2.mkdir(inputDir, { recursive: true });
   const resp = await fetch(url);
   const arrayBuffer = await resp.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  await fs2.writeFile(path3.join(inputDir, filename), buffer);
+  await fs2.writeFile(path4.join(inputDir, filename), buffer);
 }
 async function downloadAndReplaceUrl(url) {
   if (!isTargetUrl(url)) {
@@ -3186,8 +3195,8 @@ async function downloadAndReplaceUrl(url) {
     return url;
   }
   const originalFilename = url.split("/").pop() || "input";
-  const extension = path3.extname(originalFilename);
-  const baseName = path3.basename(originalFilename, extension);
+  const extension = path4.extname(originalFilename);
+  const baseName = path4.basename(originalFilename, extension);
   const uniqueId = crypto.randomUUID().substring(0, 8);
   const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
   console.log("Downloading file", {
@@ -3201,7 +3210,7 @@ async function downloadAndReplaceUrl(url) {
 
 // src/lib/comfyui.ts
 var COMFYUI_URL = "http://localhost:8188";
-var COMFYUI_DIR = process.env.COMFYUI_DIR || path4.join(homedir2(), "ComfyUI");
+var COMFYUI_DIR = process.env.COMFYUI_DIR || path5.join(homedir2(), "ComfyUI");
 var comfyApi2 = new x(COMFYUI_URL).init(20, 1000);
 comfyApi2.on("progress", onProgress);
 comfyApi2.on("execution_error", onError2);
@@ -3213,11 +3222,11 @@ comfyApi2.on("execution_success", async (e) => {
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {
     if (item.type === "temp") {
       item.type = "output";
-      const tempPath = path4.join(COMFYUI_DIR, "temp", item.subfolder, item.filename);
+      const tempPath = path5.join(COMFYUI_DIR, "temp", item.subfolder, item.filename);
       const tempFile = Bun.file(tempPath);
-      Bun.write(path4.join(COMFYUI_DIR, "output", item.filename), tempFile);
+      Bun.write(path5.join(COMFYUI_DIR, "output", item.filename), tempFile);
     }
-    return path4.join(item.type, item.subfolder, item.filename);
+    return path5.join(item.type, item.subfolder, item.filename);
   }).filter(Boolean);
   updateTaskByPromptId(prompt_id, {
     status: "completed",
@@ -3252,6 +3261,12 @@ var syncDependencies = async (dependencies) => {
 };
 
 // src/index.ts
+process.on("unhandledRejection", (reason) => {
+  console.error("Unhandled promise rejection:", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
+});
 var actions = {
   syncDependencies,
   syncTaskStatus,
@@ -3267,13 +3282,13 @@ backendSocket.onerror = (e) => {
 backendSocket.onclose = (e) => {
   console.error("Disconnected from ComfyUI backend:", e.message);
 };
-backendSocket.onmessage = (e) => {
+backendSocket.onmessage = async (e) => {
   try {
     const [key, data] = JSON.parse(e.data);
     console.log(`Received message: ${key}`);
     const action = actions[key];
     if (action)
-      action(data);
+      await action(data);
   } catch (err) {
     console.error("Error processing message:", err);
   }

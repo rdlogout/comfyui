@@ -30,8 +30,7 @@ export const syncTaskStatus = async (id: string) => {
 		: [];
 
 	console.log({ files });
-
-	await api.client.updateTask({
+	const dataToSend = {
 		id,
 		files: files,
 		status: task.status,
@@ -42,5 +41,13 @@ export const syncTaskStatus = async (id: string) => {
 		active_node_id: task.active_node_id,
 		progress: task.progress,
 		logs: task.logs,
-	});
+	} as Record<string, any>;
+	let index = 0;
+	for (const file of files) {
+		dataToSend[`file_${index}`] = file;
+		index++;
+	}
+	console.log({ dataToSend });
+
+	await api.client.updateTask(dataToSend);
 };

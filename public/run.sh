@@ -1,4 +1,5 @@
 #!/bin/bash
+# curl -fsSL https://raw.githubusercontent.com/rdlogout/comfyui/main/public/run.sh | bash
 # git reset --hard origin/main && git pull && chmod 777 run.sh && ./run.sh
 # ===== CONFIGURATION VARIABLES =====
 # Workspace and directory settings

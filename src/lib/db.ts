@@ -1,5 +1,8 @@
 import { Database } from "bun:sqlite";
-const db = new Database("comfyui.sqlite");
+import * as path from "path";
+import { COMFYUI_DIR } from "./comfyui";
+const dbPath = path.join(COMFYUI_DIR, "comfyui.sqlite");
+const db = new Database(dbPath);
 
 type Task = {
 	id: string;
