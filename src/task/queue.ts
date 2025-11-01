@@ -39,6 +39,7 @@ export const queueTask = async (data: QueueTaskData) => {
 
 	const prompt = await getWorkflow(data.prompt);
 	const isDuplicate = await isDuplicateTask(task_id);
+	console.log({ isDuplicate });
 	if (!isDuplicate) {
 		const resp = await comfyApi.appendPrompt(prompt).catch((e) => {
 			console.log("failed to queue task", task_id, e);
@@ -190,7 +191,7 @@ async function downloadAndReplaceUrl(url: string): Promise<string> {
 	//check if file exist
 	const fileExist = Bun.file(path.join(COMFYUI_DIR, "input", filename)).exists();
 	if (!fileExist) await downloadFile(url, filename);
+	else console.log(`File ${filename} already exists`);
 
-	// Download file using streaming-friendly service
 	return filename;
 }
