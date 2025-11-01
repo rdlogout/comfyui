@@ -43,9 +43,8 @@ export const onSuccess = async (e: CustomEvent<TExecution>) => {
 		console.log(`Error: History Not found`);
 		return;
 	}
-	console.log(history.status);
 	const is_error = history.status?.status_str.toLocaleLowerCase() === "error";
-	const error_msg = history.status?.status_str;
+	const error_msg = is_error ? history.status?.status_str : "";
 	// console.log({ history });
 	const files = Object.values(history?.outputs || {})
 		.map((output) => Object.values(output).flat())

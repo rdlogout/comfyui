@@ -184,7 +184,7 @@ async function downloadAndReplaceUrl(url: string): Promise<string> {
 	const filename = new URL(url).pathname.split("/").pop() || "input";
 	console.log(`Downloading file ${filename} from ${url}`);
 	//check if file exist
-	const fileExist = Bun.file(path.join(COMFYUI_DIR, "input", filename)).exists();
+	const fileExist = await Bun.file(path.join(COMFYUI_DIR, "input", filename)).exists();
 	if (!fileExist) await downloadFile(url, filename);
 	else console.log(`File ${filename} already exists`);
 

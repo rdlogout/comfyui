@@ -3181,7 +3181,7 @@ async function downloadAndReplaceUrl(url) {
   }
   const filename = new URL(url).pathname.split("/").pop() || "input";
   console.log(`Downloading file ${filename} from ${url}`);
-  const fileExist = Bun.file(path4.join(COMFYUI_DIR, "input", filename)).exists();
+  const fileExist = await Bun.file(path4.join(COMFYUI_DIR, "input", filename)).exists();
   if (!fileExist)
     await downloadFile(url, filename);
   else
@@ -3224,9 +3224,8 @@ var onSuccess2 = async (e) => {
     console.log(`Error: History Not found`);
     return;
   }
-  console.log(history.status);
   const is_error = history.status?.status_str.toLocaleLowerCase() === "error";
-  const error_msg = history.status?.status_str;
+  const error_msg = is_error ? history.status?.status_str : "";
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {
     if (item.type !== "output")
       Bun.write(path5.join(COMFYUI_DIR, "output", item.filename), Bun.file(path5.join(COMFYUI_DIR, "temp", item.subfolder, item.filename)));
