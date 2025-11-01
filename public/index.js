@@ -2997,9 +2997,8 @@ class TaskDB {
   }
   updateById(id, data = {}) {
     const task = this.insert(id);
-    task.data = task.data || {};
+    task.data = Object.assign({}, task.data, data);
     const prompt_id = task.data.prompt_id;
-    Object.assign(task.data, data);
     db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
     if (prompt_id)
       db.run(`UPDATE tasks SET prompt_id = ? WHERE id = ?`, [prompt_id, id]);
