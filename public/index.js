@@ -3236,15 +3236,21 @@ var onStart2 = (e) => {
 var onSuccess2 = async (e) => {
   const { prompt_id } = e.detail;
   const history = await comfyApi.getHistory(prompt_id);
+  if (!history) {
+    console.log(`Error: History Not found`);
+    return;
+  }
+  const error_msg = history.status?.status_str;
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {
     if (item.type !== "output")
       Bun.write(path5.join(COMFYUI_DIR, "output", item.filename), Bun.file(path5.join(COMFYUI_DIR, "temp", item.subfolder, item.filename)));
     return path5.join("output", item.subfolder, item.filename);
   }).filter(Boolean);
   taskDB.updateByPromptId(prompt_id, {
-    status: "success",
+    status: error_msg ? "failed" : "success",
     ended_at: new Date().toISOString(),
-    files
+    files,
+    error: error_msg
   });
   const task = taskDB.get(prompt_id, "prompt_id");
   if (task)

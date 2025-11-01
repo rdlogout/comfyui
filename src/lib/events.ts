@@ -39,6 +39,11 @@ export const onStart = (e: CustomEvent<TExecution>) => {
 export const onSuccess = async (e: CustomEvent<TExecution>) => {
 	const { prompt_id } = e.detail;
 	const history = await comfyApi.getHistory(prompt_id);
+	if (!history) {
+		console.log(`Error: History Not found`);
+		return;
+	}
+	const error_msg = history.status?.status_str;
 	// console.log({ history });
 	const files = Object.values(history?.outputs || {})
 		.map((output) => Object.values(output).flat())
@@ -50,9 +55,10 @@ export const onSuccess = async (e: CustomEvent<TExecution>) => {
 		})
 		.filter(Boolean);
 	taskDB.updateByPromptId(prompt_id, {
-		status: "success",
+		status: error_msg ? "failed" : "success",
 		ended_at: new Date().toISOString(),
 		files: files,
+		error: error_msg,
 	});
 
 	const task = taskDB.get(prompt_id, "prompt_id");
