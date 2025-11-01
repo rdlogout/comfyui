@@ -6,7 +6,7 @@ type Task = {
 	id: string;
 	data: {
 		prompt_id?: string;
-		status?: "queued" | "running" | "completed" | "failed";
+		status?: "inqueue" | "running" | "success" | "failed";
 		progress?: number;
 		queued_at?: string;
 		started_at?: string;

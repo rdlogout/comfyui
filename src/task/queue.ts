@@ -16,7 +16,7 @@ const isDuplicateTask = async (task_id: string) => {
 	const task = taskDB.get(task_id);
 	const prompt_id = task?.data?.prompt_id;
 	const status = task?.data?.status;
-	if (prompt_id && status !== "completed") {
+	if (prompt_id && status !== "success") {
 		const history = await comfyApi.getHistory(prompt_id);
 		if (history) {
 			console.log(`Task already executed with prompt id ${prompt_id}`);
@@ -51,9 +51,11 @@ export const queueTask = async (data: QueueTaskData) => {
 		};
 	});
 	const prompt_id = resp?.prompt_id;
-	const error = resp?.error;
+	const error = (resp as any)?.error;
 	taskDB.updateById(task_id, {
 		prompt_id,
+		status: "inqueue",
+		queued_at: new Date().toISOString(),
 		error: error as string,
 	});
 	await syncTaskStatus(task_id);

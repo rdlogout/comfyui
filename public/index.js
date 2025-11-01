@@ -3043,14 +3043,7 @@ var syncTaskStatus = async (id) => {
   })) : [];
   const dataToSend = {
     id,
-    status: data.status,
-    ended_at: data.ended_at,
-    queued_at: data.queued_at,
-    started_at: data.started_at,
-    error: data.error,
-    active_node_id: data.active_node_id,
-    progress: data.progress,
-    logs: data.logs
+    ...data
   };
   let index = 0;
   for (const file of files) {
@@ -3069,7 +3062,7 @@ var isDuplicateTask = async (task_id) => {
   const task = taskDB.get(task_id);
   const prompt_id = task?.data?.prompt_id;
   const status = task?.data?.status;
-  if (prompt_id && status !== "completed") {
+  if (prompt_id && status !== "success") {
     const history = await comfyApi.getHistory(prompt_id);
     if (history) {
       console.log(`Task already executed with prompt id ${prompt_id}`);
@@ -3103,6 +3096,8 @@ var queueTask = async (data) => {
   const error = resp?.error;
   taskDB.updateById(task_id, {
     prompt_id,
+    status: "inqueue",
+    queued_at: new Date().toISOString(),
     error
   });
   await syncTaskStatus(task_id);
@@ -3258,7 +3253,7 @@ var onSuccess2 = async (e) => {
     return path5.join("output", item.subfolder, item.filename);
   }).filter(Boolean);
   taskDB.updateByPromptId(prompt_id, {
-    status: "completed",
+    status: "success",
     ended_at: new Date().toISOString(),
     files
   });

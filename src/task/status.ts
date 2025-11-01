@@ -31,14 +31,7 @@ export const syncTaskStatus = async (id: string) => {
 
 	const dataToSend = {
 		id,
-		status: data.status,
-		ended_at: data.ended_at,
-		queued_at: data.queued_at,
-		started_at: data.started_at,
-		error: data.error,
-		active_node_id: data.active_node_id,
-		progress: data.progress,
-		logs: data.logs,
+		...data,
 	} as Record<string, any>;
 	let index = 0;
 	for (const file of files) {

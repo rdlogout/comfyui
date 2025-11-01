@@ -49,7 +49,7 @@ export const onSuccess = async (e: CustomEvent<TExecution>) => {
 		})
 		.filter(Boolean);
 	taskDB.updateByPromptId(prompt_id, {
-		status: "completed",
+		status: "success",
 		ended_at: new Date().toISOString(),
 		files: files,
 	});
