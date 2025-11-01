@@ -2122,36 +2122,18 @@ class RPCLink extends StandardRPCLink {
   }
 }
 
-// src/lib/api.ts
-var machineId = Bun.env.MACHINE_ID;
-var DEV = Bun.env.NODE_ENV === "development";
-var DOMAIN = DEV ? `localhost:8787` : `fussion.studio`;
-var BASE_URL = `http${DEV ? "" : "s"}://${DOMAIN}`;
-var WS_URL = `ws${DEV ? "" : "s"}://${DOMAIN}`;
-console.table({ DEV, machineId, DOMAIN });
-var customFetch = (url, options) => {
-  return fetch(url, {
-    ...options,
-    rejectUnauthorized: false
-  });
-};
-var link = new RPCLink({
-  url: `${BASE_URL}/rpc`,
-  fetch: customFetch,
-  headers: {
-    "x-machine-id": machineId
-  }
-});
-var api = createORPCClient(link);
-
-// src/lib/comfyui.ts
-import * as path6 from "path";
-
 // src/lib/config.ts
 import { homedir as homedir2 } from "os";
 import * as path2 from "path";
 var COMFYUI_URL = "http://localhost:8188";
 var COMFYUI_DIR = process.env.COMFYUI_DIR || path2.join(homedir2(), "ComfyUI");
+var MACHINE_ID = process.env.MACHINE_ID;
+var DEV = Bun.env.NODE_ENV === "development";
+var DOMAIN = DEV ? `localhost:8787` : `fussion.studio`;
+var BASE_URL = `http${DEV ? "" : "s"}://${DOMAIN}`;
+var WS_URL = `ws${DEV ? "" : "s"}://${DOMAIN}`;
+var DB_PATH = path2.join(COMFYUI_DIR, "db.sqlite");
+console.table({ MACHINE_ID, DOMAIN, COMFYUI_DIR });
 
 // node_modules/@saintno/comfyui-sdk/build/index.esm.js
 import u from "ws";
@@ -2937,142 +2919,129 @@ if (typeof CustomEvent > "u")
     }
   };
 
+// src/lib/services.ts
+var comfyApi = new x(COMFYUI_URL).init(20, 1000);
+var customFetch = (url, options) => {
+  return fetch(url, {
+    ...options,
+    rejectUnauthorized: false
+  });
+};
+var link = new RPCLink({
+  url: `${BASE_URL}/rpc`,
+  fetch: (request, init, options, path3, input) => {
+    return customFetch(request.url, {
+      ...init,
+      method: request.method,
+      headers: request.headers,
+      body: request.body
+    });
+  },
+  headers: {
+    "x-machine-id": MACHINE_ID
+  }
+});
+var api = createORPCClient(link);
+
+// src/dependency/index.ts
+var syncDependencies = async (dependencies) => {
+  console.log("Syncing dependencies");
+  console.table(dependencies.map((s) => ({ type: s.type, output: s.output || s.url })));
+  const customNodes = dependencies.filter((d) => d.type === "custom_node");
+  const models = dependencies.filter((d) => d.type === "model");
+  const nodePromises = customNodes.map(async (node) => {
+    console.log(`Installing custom node from ${node.url}`);
+    const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
+    return { id: node.id, type: "custom_node", success: resp, message: "All Good" };
+  });
+  const modelPromises = models.map(async (model) => {
+    const resp = await downloadModel(model.url, model.output);
+    return { id: model.id, type: "model", success: resp.success, message: resp.message };
+  });
+  const results = await Promise.all([...nodePromises, ...modelPromises]);
+  const successResult = results.filter((r) => r.success);
+  console.log("Successfully synced dependencies:");
+  console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
+  await api.client.updateDependencies(successResult);
+};
+
+// src/task/status.ts
+import * as path3 from "path";
+
 // src/lib/db.ts
 import { Database } from "bun:sqlite";
-import * as path3 from "path";
-console.log({ COMFYUI_DIR });
-var dbPath = path3.join(COMFYUI_DIR, "comfyui.sqlite");
-console.log({ dbPath });
-var db = new Database(dbPath);
+var db = new Database(DB_PATH);
 db.run(`
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
 			prompt_id TEXT,
-			status TEXT,
-			progress REAL DEFAULT 0,
-			queued_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			started_at TIMESTAMP,
-			ended_at TIMESTAMP,
-			error TEXT,
-			active_node_id TEXT,
-			logs TEXT,
-			files TEXT,
-			name TEXT,
-			endpoint TEXT,
-			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+			data TEXT
 		)
 	`);
-var getTaskByPromptId = (prompt_id) => {
-  return db.query("SELECT * FROM tasks WHERE prompt_id = ?").get(prompt_id);
-};
-var updateTaskByPromptId = (prompt_id, data) => {
-  const task = getTaskByPromptId(prompt_id);
-  if (!task)
-    return false;
-  updateTask(task.id, data);
-  return true;
-};
-var updateTask = (id, obj) => {
-  const fields = [];
-  const values = [];
-  const placeholders = [];
-  Object.entries(obj).forEach(([key, value2]) => {
-    if (value2 !== undefined) {
-      fields.push(key);
-      values.push(value2);
-      placeholders.push(`?`);
-    }
-  });
-  if (fields.length === 0)
-    return;
-  fields.push("updated_at");
-  values.push(new Date().toISOString());
-  const updateFields = fields.map((field) => `${field} = ?`).join(", ");
-  const updateResult = db.run(`UPDATE tasks SET ${updateFields} WHERE id = ?`, [...values, id]);
-  console.log({ updateResult });
-};
-var getTask = (id) => {
-  let task = db.query("SELECT * FROM tasks WHERE id = ?").get(id);
-  if (!task) {
-    db.run(`INSERT INTO tasks (id) VALUES (?)`, [id]);
-    task = { id };
-  }
-  return task;
-};
-var updatePromptId = (id, prompt_id) => {
-  const task = getTask(id);
-  if (task.prompt_id) {
-    console.log("task already has prompt id", id, task.prompt_id);
-    return false;
-  }
-  updateTask(id, { prompt_id });
-  console.log("task is updated with prompt id", id, prompt_id);
-  return true;
-};
 
-// src/lib/events.ts
-var onProgress = (e) => {
-  const { prompt_id, max, value: value2, node } = e.detail;
-  const percentage = value2 / max * 100;
-  console.log(`Progress: ${percentage.toFixed(2)}% (${value2}/${max})`);
-  updateTaskByPromptId(prompt_id, {
-    progress: percentage,
-    active_node_id: node || ""
-  });
-};
-var onError2 = (e) => {
-  const { prompt_id } = e.detail;
-  console.log(`Error: ${e.detail.exception_message}`);
-  updateTaskByPromptId(prompt_id, {
-    error: e.detail.exception_message,
-    status: "failed",
-    ended_at: new Date().toISOString()
-  });
-};
-var onStart2 = (e) => {
-  const { prompt_id } = e.detail;
-  console.log(`Start: ${prompt_id}`);
-  updateTaskByPromptId(prompt_id, {
-    status: "running",
-    started_at: new Date().toISOString(),
-    progress: 0
-  });
-};
+class TaskDB {
+  get(id, key = "id") {
+    const task = db.query(`SELECT * FROM tasks WHERE ${key} = ?`).get(id);
+    if (!task)
+      return;
+    if (task.data)
+      task.data = JSON.parse(task.data || "{}");
+    return task;
+  }
+  insert(id) {
+    const existingTask = this.get(id);
+    if (existingTask?.data?.prompt_id)
+      return existingTask;
+    db.run(`INSERT INTO tasks (id) VALUES (?)`, [id]);
+    return { id, data: {} };
+  }
+  updateById(id, data = {}) {
+    const task = this.insert(id);
+    if (!task.data)
+      task.data = {};
+    Object.assign(task.data, data);
+    db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
+    return true;
+  }
+  updateByPromptId(prompt_id, data = {}) {
+    const task = this.get(prompt_id, "prompt_id");
+    if (!task)
+      return false;
+    return this.updateById(task.id, data);
+  }
+}
+var taskDB = new TaskDB;
 
 // src/task/status.ts
-import * as path4 from "path";
 var syncTaskStatus = async (id) => {
   console.log("syncing task status", id);
-  const task = getTask(id);
+  const task = taskDB.get(id);
   if (!task) {
     console.log("task not found", id);
     return;
   }
-  if (!task.prompt_id) {
+  if (!task.data?.prompt_id) {
     console.log("task not queued", id);
     return;
   }
-  if (task.files)
-    task.files = JSON.parse(task.files);
-  const files = Array.isArray(task.files) ? await Promise.all(task.files.map(async (file) => {
-    const localFile = Bun.file(path4.join(COMFYUI_DIR, file));
+  const data = task.data || {};
+  const files = Array.isArray(data.files) ? await Promise.all(data.files.map(async (file) => {
+    const localFile = Bun.file(path3.join(COMFYUI_DIR, file));
     const filename = localFile.name?.split("/").pop() || localFile.name;
     return new File([await localFile.arrayBuffer()], filename, {
       type: localFile.type
     });
   })) : [];
-  console.log({ files });
   const dataToSend = {
     id,
-    status: task.status,
-    ended_at: task.ended_at,
-    queued_at: task.queued_at,
-    started_at: task.started_at,
-    error: task.error,
-    active_node_id: task.active_node_id,
-    progress: task.progress,
-    logs: task.logs
+    status: data.status,
+    ended_at: data.ended_at,
+    queued_at: data.queued_at,
+    started_at: data.started_at,
+    error: data.error,
+    active_node_id: data.active_node_id,
+    progress: data.progress,
+    logs: data.logs
   };
   let index = 0;
   for (const file of files) {
@@ -3084,19 +3053,48 @@ var syncTaskStatus = async (id) => {
 };
 
 // src/task/queue.ts
-import path5 from "path";
+import path4 from "path";
 import crypto from "crypto";
 import fs2 from "fs/promises";
+var isDuplicateTask = async (task_id) => {
+  const task = taskDB.get(task_id);
+  const prompt_id = task?.data?.prompt_id;
+  if (prompt_id) {
+    const history = await comfyApi.getHistory(prompt_id);
+    if (history) {
+      console.log(`Task already executed with prompt id ${prompt_id}`);
+      return true;
+    }
+    const queue = await comfyApi.getQueue();
+    const in_queue = !!queue?.queue_pending?.find((item) => Object.values(item).includes(prompt_id));
+    const is_running = !!queue?.queue_running?.find((item) => Object.values(item).includes(prompt_id));
+    if (in_queue || is_running) {
+      console.log(`Task ${task_id} is already in queue or running with prompt id ${prompt_id}`);
+      return true;
+    }
+  }
+  return false;
+};
 var queueTask = async (data) => {
   const { id: task_id } = data;
   const prompt = await getWorkflow(data.prompt);
-  const task = getTask(task_id);
-  const resp = await comfyApi.appendPrompt(prompt);
-  console.log(resp);
-  const prompt_id = resp.prompt_id;
-  if (prompt_id) {
-    const success = updatePromptId(task_id, prompt_id);
+  const isDuplicate = await isDuplicateTask(task_id);
+  if (isDuplicate) {
+    return;
   }
+  const resp = await comfyApi.appendPrompt(prompt).catch((e) => {
+    console.log("failed to queue task", task_id, e);
+    return {
+      prompt_id: "",
+      error: `Failed to queue task : ${e.message}`
+    };
+  });
+  const prompt_id = resp?.prompt_id;
+  const error = resp?.error;
+  taskDB.updateById(task_id, {
+    prompt_id,
+    error
+  });
   await syncTaskStatus(task_id);
 };
 async function getWorkflow(workflowInput) {
@@ -3188,12 +3186,12 @@ function isTargetUrl(value2) {
 }
 async function downloadFile(url, filename) {
   const comfyuiPath = COMFYUI_DIR;
-  const inputDir = path5.join(comfyuiPath, "input");
+  const inputDir = path4.join(comfyuiPath, "input");
   await fs2.mkdir(inputDir, { recursive: true });
   const resp = await fetch(url);
   const arrayBuffer = await resp.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
-  await fs2.writeFile(path5.join(inputDir, filename), buffer);
+  await fs2.writeFile(path4.join(inputDir, filename), buffer);
 }
 async function downloadAndReplaceUrl(url) {
   if (!isTargetUrl(url)) {
@@ -3201,8 +3199,8 @@ async function downloadAndReplaceUrl(url) {
     return url;
   }
   const originalFilename = url.split("/").pop() || "input";
-  const extension = path5.extname(originalFilename);
-  const baseName = path5.basename(originalFilename, extension);
+  const extension = path4.extname(originalFilename);
+  const baseName = path4.basename(originalFilename, extension);
   const uniqueId = crypto.randomUUID().substring(0, 8);
   const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
   console.log("Downloading file", {
@@ -3214,54 +3212,52 @@ async function downloadAndReplaceUrl(url) {
   return uniqueFilename;
 }
 
-// src/lib/comfyui.ts
-var comfyApi = new x(COMFYUI_URL).init(20, 1000);
-comfyApi.on("progress", onProgress);
-comfyApi.on("execution_error", onError2);
-comfyApi.on("execution_start", onStart2);
-comfyApi.on("execution_success", async (e) => {
+// src/lib/events.ts
+import * as path5 from "path";
+var onProgress = (e) => {
+  const { prompt_id, max, value: value2, node } = e.detail;
+  const percentage = value2 / max * 100;
+  console.log(`Progress: ${percentage.toFixed(2)}% (${value2}/${max})`);
+  taskDB.updateByPromptId(prompt_id, {
+    progress: percentage,
+    active_node_id: node || ""
+  });
+};
+var onError2 = (e) => {
+  const { prompt_id } = e.detail;
+  console.log(`Error: ${e.detail.exception_message}`);
+  taskDB.updateByPromptId(prompt_id, {
+    error: e.detail.exception_message,
+    status: "failed",
+    ended_at: new Date().toISOString()
+  });
+};
+var onStart2 = (e) => {
+  const { prompt_id } = e.detail;
+  console.log(`Start: ${prompt_id}`);
+  taskDB.updateByPromptId(prompt_id, {
+    status: "running",
+    started_at: new Date().toISOString(),
+    progress: 0
+  });
+};
+var onSuccess2 = async (e) => {
   const { prompt_id } = e.detail;
   const history = await comfyApi.getHistory(prompt_id);
   console.log({ history });
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {
-    if (item.type === "temp") {
-      item.type = "output";
-      const tempPath = path6.join(COMFYUI_DIR, "temp", item.subfolder, item.filename);
-      const tempFile = Bun.file(tempPath);
-      Bun.write(path6.join(COMFYUI_DIR, "output", item.filename), tempFile);
-    }
-    return path6.join(item.type, item.subfolder, item.filename);
+    if (item.type !== "output")
+      Bun.write(path5.join(COMFYUI_DIR, "output", item.filename), Bun.file(path5.join(COMFYUI_DIR, "temp", item.subfolder, item.filename)));
+    return path5.join("output", item.subfolder, item.filename);
   }).filter(Boolean);
-  updateTaskByPromptId(prompt_id, {
+  taskDB.updateByPromptId(prompt_id, {
     status: "completed",
     ended_at: new Date().toISOString(),
-    files: JSON.stringify(files)
+    files
   });
-  const task = getTaskByPromptId(prompt_id);
+  const task = taskDB.get(prompt_id, "prompt_id");
   if (task)
     await syncTaskStatus(task.id);
-});
-
-// src/dependency/index.ts
-var syncDependencies = async (dependencies) => {
-  console.log("Syncing dependencies");
-  console.table(dependencies.map((s) => ({ type: s.type, output: s.output || s.url })));
-  const customNodes = dependencies.filter((d) => d.type === "custom_node");
-  const models = dependencies.filter((d) => d.type === "model");
-  const nodePromises = customNodes.map(async (node) => {
-    console.log(`Installing custom node from ${node.url}`);
-    const resp = await comfyApi.ext.manager.installExtensionFromGit(node.url);
-    return { id: node.id, type: "custom_node", success: resp, message: "All Good" };
-  });
-  const modelPromises = models.map(async (model) => {
-    const resp = await downloadModel(model.url, model.output);
-    return { id: model.id, type: "model", success: resp.success, message: resp.message };
-  });
-  const results = await Promise.all([...nodePromises, ...modelPromises]);
-  const successResult = results.filter((r) => r.success);
-  console.log("Successfully synced dependencies:");
-  console.table(results.map((s) => ({ success: s.success, message: s.message, type: s.type })));
-  await api.client.updateDependencies(successResult);
 };
 
 // src/index.ts
@@ -3276,7 +3272,7 @@ var actions = {
   syncTaskStatus,
   queueTask
 };
-var backendSocket = new reconnecting_websocket_mjs_default(`${WS_URL}/ws/machine?id=${machineId}`);
+var backendSocket = new reconnecting_websocket_mjs_default(`${WS_URL}/ws/machine?id=${MACHINE_ID}`);
 backendSocket.onopen = () => {
   console.log("Connected to ComfyUI backend");
 };
@@ -3297,4 +3293,8 @@ backendSocket.onmessage = async (e) => {
     console.error("Error processing message:", err);
   }
 };
+comfyApi.on("progress", onProgress);
+comfyApi.on("execution_error", onError2);
+comfyApi.on("execution_start", onStart2);
+comfyApi.on("execution_success", onSuccess2);
 console.log("Starting ComfyUI backend client");

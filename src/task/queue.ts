@@ -1,39 +1,60 @@
 import path from "path";
 import crypto from "crypto";
 import fs from "fs/promises";
-import { getTask, insertTask, updatePromptId, updateTask } from "src/lib/db";
-import { comfyApi } from "src/lib/comfyui";
+import { taskDB } from "src/lib/db";
+import { comfyApi } from "src/lib/services";
 import { COMFYUI_DIR } from "src/lib/config";
 import { syncTaskStatus } from "./status";
+import { QueueItem } from "@saintno/comfyui-sdk";
 type QueueTaskData = {
 	id: string;
 	prompt: any;
+	progress_map: Map<string, number>;
+};
+
+const isDuplicateTask = async (task_id: string) => {
+	const task = taskDB.get(task_id);
+	const prompt_id = task?.data?.prompt_id;
+	if (prompt_id) {
+		const history = await comfyApi.getHistory(prompt_id);
+		if (history) {
+			console.log(`Task already executed with prompt id ${prompt_id}`);
+			return true;
+		}
+		const queue = await comfyApi.getQueue();
+		const in_queue = !!queue?.queue_pending?.find((item: QueueItem) => Object.values(item).includes(prompt_id));
+		const is_running = !!queue?.queue_running?.find((item: QueueItem) => Object.values(item).includes(prompt_id));
+		if (in_queue || is_running) {
+			console.log(`Task ${task_id} is already in queue or running with prompt id ${prompt_id}`);
+			return true;
+		}
+	}
+
+	return false;
 };
 
 export const queueTask = async (data: QueueTaskData) => {
 	const { id: task_id } = data;
+
 	const prompt = await getWorkflow(data.prompt);
-	const task = getTask(task_id);
-	// if (task.prompt_id) {
-	// 	const history = await comfyApi.getHistory(task.prompt_id);
-	// 	if (history) {
-	// 		console.log("task already has prompt id", task_id, task.prompt_id);
-	// 		return;
-	// 	}
-	// }
-	const resp = await comfyApi.appendPrompt(prompt);
-	console.log(resp);
-	const prompt_id = resp.prompt_id;
-	if (prompt_id) {
-		const success = updatePromptId(task_id, prompt_id);
-		// if(!success){
-		// 	console.log("failed to update prompt id", task_id, prompt_id);
-		// 	//cancel the task
-		// 	// comfyApi.(prompt_id);
-		// 	return;
-		// }
+	const isDuplicate = await isDuplicateTask(task_id);
+	if (isDuplicate) {
+		return;
 	}
-	// updateTask(task_id, { prompt_id: resp.prompt_id, error: JSON.stringify(resp.node_errors) });
+
+	const resp = await comfyApi.appendPrompt(prompt).catch((e) => {
+		console.log("failed to queue task", task_id, e);
+		return {
+			prompt_id: "",
+			error: `Failed to queue task : ${e.message}`,
+		};
+	});
+	const prompt_id = resp?.prompt_id;
+	const error = resp?.error;
+	taskDB.updateById(task_id, {
+		prompt_id,
+		error: error as string,
+	});
 	await syncTaskStatus(task_id);
 	// resp.
 };

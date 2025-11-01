@@ -1,6 +1,6 @@
 import { downloadModel } from "./model";
-import { api } from "src/lib/api";
-import { comfyApi } from "src/lib/comfyui";
+import { api } from "src/lib/services";
+import { comfyApi } from "src/lib/services";
 type Dependency = {
 	id: string;
 	url: string;
