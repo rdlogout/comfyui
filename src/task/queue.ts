@@ -15,7 +15,8 @@ type QueueTaskData = {
 const isDuplicateTask = async (task_id: string) => {
 	const task = taskDB.get(task_id);
 	const prompt_id = task?.data?.prompt_id;
-	if (prompt_id) {
+	const status = task?.data?.status;
+	if (prompt_id && status !== "completed") {
 		const history = await comfyApi.getHistory(prompt_id);
 		if (history) {
 			console.log(`Task already executed with prompt id ${prompt_id}`);

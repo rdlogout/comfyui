@@ -2997,16 +2997,17 @@ class TaskDB {
   }
   updateById(id, data = {}) {
     const task = this.insert(id);
-    if (!task.data)
-      task.data = {};
+    task.data = task.data || {};
     Object.assign(task.data, data);
     db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
     return true;
   }
   updateByPromptId(prompt_id, data = {}) {
     const task = this.get(prompt_id, "prompt_id");
-    if (!task)
+    if (!task) {
+      console.log("task not found", prompt_id);
       return false;
+    }
     return this.updateById(task.id, data);
   }
 }
@@ -3059,7 +3060,8 @@ import fs2 from "fs/promises";
 var isDuplicateTask = async (task_id) => {
   const task = taskDB.get(task_id);
   const prompt_id = task?.data?.prompt_id;
-  if (prompt_id) {
+  const status = task?.data?.status;
+  if (prompt_id && status !== "completed") {
     const history = await comfyApi.getHistory(prompt_id);
     if (history) {
       console.log(`Task already executed with prompt id ${prompt_id}`);

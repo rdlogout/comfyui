@@ -51,7 +51,7 @@ class TaskDB {
 
 	updateById(id: string, data: Task["data"] = {}): boolean {
 		const task = this.insert(id);
-		if (!task.data) task.data = {};
+		task.data = task.data || {};
 		Object.assign(task.data, data);
 		db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
 		return true;
@@ -59,7 +59,10 @@ class TaskDB {
 
 	updateByPromptId(prompt_id: string, data: Task["data"] = {}): boolean {
 		const task = this.get(prompt_id, "prompt_id");
-		if (!task) return false;
+		if (!task) {
+			console.log("task not found", prompt_id);
+			return false;
+		}
 		return this.updateById(task.id, data);
 	}
 }
