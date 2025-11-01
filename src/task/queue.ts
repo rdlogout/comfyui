@@ -64,18 +64,7 @@ export const queueTask = async (data: QueueTaskData) => {
 
 async function getWorkflow(workflowInput: any) {
 	// Handle both string and object inputs
-	let workflow: any;
-	if (typeof workflowInput === "string") {
-		// Parse the workflow string to object
-		workflow = JSON.parse(workflowInput);
-	} else {
-		// Use the object directly
-		workflow = workflowInput;
-	}
-
-	// console.log("workflow", workflow);
-
-	// Process the workflow to download and replace URLs
+	let workflow: any = typeof workflowInput === "string" ? JSON.parse(workflowInput) : workflowInput;
 	const processedWorkflow = await processWorkflowUrls(workflow);
 
 	return processedWorkflow;
@@ -170,6 +159,7 @@ function isTargetUrl(value: string): boolean {
 	// Check if the value is a URL from https://ai.drahul.dev/
 	try {
 		const url = new URL(value);
+		return true;
 		return url.protocol === "https:" && url.hostname === "ai.drahul.dev";
 	} catch {
 		return false;
