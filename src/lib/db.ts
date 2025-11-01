@@ -26,7 +26,7 @@ type Task = {
 db.run(`
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
-			prompt_id TEXT,
+			prompt_id TEXT UNIQUE,
 			data TEXT
 		)
 	`);
@@ -40,6 +40,7 @@ class TaskDB {
 		const task = db.query(`SELECT * FROM tasks WHERE ${key} = ?`).get(id) as Task | undefined;
 		if (!task) return undefined;
 		if (task.data) task.data = JSON.parse((task.data as string) || "{}");
+
 		return task;
 	}
 	private insert(id: string): Task {
@@ -52,8 +53,10 @@ class TaskDB {
 	updateById(id: string, data: Task["data"] = {}): boolean {
 		const task = this.insert(id);
 		task.data = task.data || {};
+		const prompt_id = task.data.prompt_id;
 		Object.assign(task.data, data);
 		db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
+		if (prompt_id) db.run(`UPDATE tasks SET prompt_id = ? WHERE id = ?`, [prompt_id, id]);
 		return true;
 	}
 

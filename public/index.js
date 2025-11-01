@@ -2974,7 +2974,7 @@ var db = new Database(DB_PATH);
 db.run(`
 		CREATE TABLE IF NOT EXISTS tasks (
 			id TEXT PRIMARY KEY,
-			prompt_id TEXT,
+			prompt_id TEXT UNIQUE,
 			data TEXT
 		)
 	`);
@@ -2998,8 +2998,11 @@ class TaskDB {
   updateById(id, data = {}) {
     const task = this.insert(id);
     task.data = task.data || {};
+    const prompt_id = task.data.prompt_id;
     Object.assign(task.data, data);
     db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
+    if (prompt_id)
+      db.run(`UPDATE tasks SET prompt_id = ? WHERE id = ?`, [prompt_id, id]);
     return true;
   }
   updateByPromptId(prompt_id, data = {}) {
