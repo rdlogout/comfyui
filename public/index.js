@@ -3223,6 +3223,7 @@ var onSuccess2 = async (e) => {
     console.log(`Error: History Not found`);
     return;
   }
+  console.log(history.status);
   const is_error = history.status?.status_str.toLocaleLowerCase() === "error";
   const error_msg = history.status?.status_str;
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {

@@ -42,6 +42,7 @@ backendSocket.onmessage = async (e: MessageEvent) => {
 };
 comfyApi.on("progress", onProgress);
 comfyApi.on("execution_error", onError);
+
 comfyApi.on("queue_error", (e) => {
 	console.log(`Queue Error: ${e.detail.message}`);
 });
