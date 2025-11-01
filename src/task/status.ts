@@ -1,5 +1,6 @@
 import { api } from "src/lib/api";
-import { comfyApi, COMFYUI_DIR } from "src/lib/comfyui";
+import { comfyApi } from "src/lib/comfyui";
+import { COMFYUI_DIR } from "src/lib/config";
 import * as path from "path";
 import { getTask } from "src/lib/db";
 

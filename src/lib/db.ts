@@ -1,6 +1,6 @@
 import { Database } from "bun:sqlite";
 import * as path from "path";
-import { COMFYUI_DIR } from "./comfyui";
+import { COMFYUI_DIR } from "./config";
 const dbPath = path.join(COMFYUI_DIR, "comfyui.sqlite");
 const db = new Database(dbPath);
 

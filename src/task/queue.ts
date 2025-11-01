@@ -2,7 +2,8 @@ import path from "path";
 import crypto from "crypto";
 import fs from "fs/promises";
 import { getTask, insertTask, updatePromptId, updateTask } from "src/lib/db";
-import { comfyApi, COMFYUI_DIR } from "src/lib/comfyui";
+import { comfyApi } from "src/lib/comfyui";
+import { COMFYUI_DIR } from "src/lib/config";
 import { syncTaskStatus } from "./status";
 type QueueTaskData = {
 	id: string;

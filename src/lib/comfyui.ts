@@ -1,8 +1,5 @@
-import { homedir } from "os";
 import * as path from "path";
-
-export const COMFYUI_URL = "http://localhost:8188";
-export const COMFYUI_DIR = process.env.COMFYUI_DIR || path.join(homedir(), "ComfyUI");
+import { COMFYUI_URL, COMFYUI_DIR } from "./config";
 
 import { ComfyApi } from "@saintno/comfyui-sdk";
 import { onError, onProgress, onStart, onSuccess } from "./events";
