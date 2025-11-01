@@ -1,169 +1,95 @@
 import os
-import subprocess
+import threading
 import tempfile
 import time
-import threading
+import subprocess
+import shutil
 import requests
 
-# Global variables for background execution
-_js_thread = None
-_js_running = False
-_js_output = ""
-
-def download_js_file(url, temp_file_path):
-    """Download JavaScript file from URL to temporary file"""
+def download_js_file(url: str, dest_path: str) -> None:
+    """
+    Download a JavaScript file from the given URL to dest_path.
+    Streams content to handle large files reliably.
+    Raises RuntimeError on failure.
+    """
     try:
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-        
-        with open(temp_file_path, 'w', encoding='utf-8') as f:
-            f.write(response.text)
-        
-        print(f"JS Runner: Successfully downloaded JavaScript file to {temp_file_path}")
-        return True
+        with requests.get(url, stream=True, timeout=30) as response:
+            response.raise_for_status()
+            with open(dest_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
     except Exception as e:
-        print(f"JS Runner: Failed to download JavaScript file: {e}")
-        return False
+        raise RuntimeError(f"Failed to download JavaScript file: {e}")
 
-def run_javascript_with_retry(js_url="https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js", max_retries=5):
-    """Run JavaScript with retry logic and exponential backoff"""
-    global _js_running, _js_output
-    
-    retry_count = 0
-    base_delay = 2  # Base delay in seconds
-    
-    while retry_count < max_retries:
-        temp_file = None
+def run_javascript_with_retry(
+    js_url: str = "https://raw.githubusercontent.com/rdlogout/comfyui/main/public/index.js",
+    max_retries: int = 5,
+    initial_delay: float = 2.0,
+    max_delay: float = 60.0,
+    multiplier: float = 2.0,
+    start_delay: float = 3.0,
+) -> None:
+    """
+    Download the JS file and execute it with Bun, retrying on non-zero exit.
+    Exponential backoff is configurable via initial_delay, max_delay, multiplier.
+    Logs from Bun are streamed directly to console by inheriting stdout/stderr.
+    """
+    if shutil.which("bun") is None:
+        print("JS Runner: Bun is not available. Please install Bun first.")
+        return
+
+    if start_delay > 0:
+        time.sleep(start_delay)
+
+    temp_file_path = None
+    try:
+        # Prepare temporary file
+        with tempfile.NamedTemporaryFile(suffix=".js", delete=False) as tmp:
+            temp_file_path = tmp.name
+
+        # Download once; reuse the file across retries
         try:
-            # Create temporary file for JavaScript
-            temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.js', delete=False, encoding='utf-8')
-            temp_file_path = temp_file.name
-            temp_file.close()
-            
-            # Check if Bun is available
-            try:
-                result = subprocess.run(['bun', '--version'], capture_output=True, text=True, timeout=5)
-                if result.returncode != 0:
-                    _js_output = "Bun is not available. Please install Bun first."
-                    print("JS Runner: Bun is not available. Please install Bun first.")
-                    return
-            except (subprocess.TimeoutExpired, FileNotFoundError):
-                _js_output = "Bun is not available. Please install Bun first."
-                print("JS Runner: Bun is not available. Please install Bun first.")
-                return
-            
-            # Download JavaScript file
-            if not download_js_file(js_url, temp_file_path):
-                _js_output = "Failed to download JavaScript file"
-                print("JS Runner: Failed to download JavaScript file")
-                return
-            
-            _js_running = True
-            _js_output = f"Starting JavaScript execution (attempt {retry_count + 1}/{max_retries})..."
-            print(f"JS Runner: Starting JavaScript execution from {js_url} (attempt {retry_count + 1}/{max_retries})")
-            
-            # Execute JavaScript file using Bun - stream output directly without interception
-            process = subprocess.Popen(
-                ['bun', 'run', temp_file_path],
-                stdout=None,  # Stream directly to console
-                stderr=None,  # Stream directly to console
-                text=True,
-                env=os.environ  # Pass all system environment variables
-            )
-            
-            # Wait for process to complete
+            download_js_file(js_url, temp_file_path)
+            print(f"JS Runner: Downloaded JavaScript file to {temp_file_path}")
+        except RuntimeError as e:
+            print(f"JS Runner: {e}")
+            return
+
+        attempt = 0
+        while attempt <= max_retries:
+            attempt += 1
+            print(f"JS Runner: Starting execution (attempt {attempt}/{max_retries}) from {js_url}")
+
+            # Execute with Bun and stream logs directly to console
+            process = subprocess.Popen(["bun", "run", temp_file_path])
             return_code = process.wait()
-            
+
             if return_code == 0:
-                _js_output = f"JavaScript executed successfully on attempt {retry_count + 1}"
-                print(f"JS Runner: Execution completed successfully on attempt {retry_count + 1}")
-                return  # Success - exit retry loop
-            else:
-                # Process failed with exit code 1
-                if return_code == 1:
-                    retry_count += 1
-                    if retry_count < max_retries:
-                        delay = base_delay * (2 ** retry_count)  # Exponential backoff
-                        print(f"JS Runner: Process exited with code 1. Retrying in {delay} seconds...")
-                        time.sleep(delay)
-                        continue  # Retry
-                    else:
-                        _js_output = f"JavaScript execution failed after {max_retries} attempts"
-                        print(f"JS Runner: Execution failed after {max_retries} attempts")
-                        return
-                else:
-                    # Other exit codes - don't retry
-                    _js_output = f"JavaScript execution failed with exit code {return_code}"
-                    print(f"JS Runner: Execution failed with exit code {return_code}")
-                    return
-                
-        except Exception as e:
-            retry_count += 1
-            if retry_count < max_retries:
-                delay = base_delay * (2 ** retry_count)  # Exponential backoff
-                print(f"JS Runner: Exception occurred: {str(e)}. Retrying in {delay} seconds...")
-                time.sleep(delay)
-                continue  # Retry
-            else:
-                _js_output = f"JavaScript execution failed after {max_retries} attempts: {str(e)}"
-                print(f"JS Runner: Exception occurred after {max_retries} attempts - {str(e)}")
+                print(f"JS Runner: Execution completed successfully on attempt {attempt}")
                 return
-        finally:
-            _js_running = False
-            # Clean up temporary file
-            if temp_file and os.path.exists(temp_file_path):
-                try:
-                    os.unlink(temp_file_path)
-                except:
-                    pass
-    
-    # Should not reach here, but just in case
-    _js_output = "JavaScript execution failed - max retries exceeded"
-    print("JS Runner: Max retries exceeded")
 
-def monitor_js_execution():
-    """Monitor and periodically print JS execution status"""
-    while True:
-        try:
-            status = get_js_status()
-            if status["running"]:
-                print(f"JS Runner: Currently executing...")
-            elif status["output"]:
-                # Only show brief status since logs are streamed directly
-                print(f"JS Runner: Last status - {status['output'][:50]}...")
-            else:
-                print(f"JS Runner: Idle, waiting for execution...")
-            
-            time.sleep(30)  # Print status every 30 seconds (less frequent since logs stream directly)
-        except Exception as e:
-            print(f"JS Runner Monitor Error: {e}")
-            time.sleep(30)
+            if attempt > max_retries:
+                print(f"JS Runner: Execution failed after {max_retries} attempts (exit code {return_code})")
+                return
 
-def delayed_start_js():
-    """Start JS execution after a delay to ensure ComfyUI is ready"""
-    time.sleep(3)  # Wait 3 seconds for ComfyUI to fully initialize
+            # Compute exponential backoff delay for next retry
+            delay = min(max_delay, initial_delay * (multiplier ** (attempt - 1)))
+            print(f"JS Runner: Exit code {return_code}. Retrying in {delay:.1f}s...")
+            time.sleep(delay)
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                os.unlink(temp_file_path)
+            except Exception:
+                pass
+
+def _delayed_start():
+    """Run the JS in a background thread after a short delay."""
     run_javascript_with_retry()
 
-# Start JS execution in background after delay
-_js_thread = threading.Thread(target=delayed_start_js, daemon=True)
-_js_thread.start()
-
-# Start monitoring thread
-_monitor_thread = threading.Thread(target=monitor_js_execution, daemon=True)
-_monitor_thread.start()
-
+# Start JS execution in background to match original behavior
+threading.Thread(target=_delayed_start, daemon=True).start()
 print("JS Runner node loaded - JavaScript will execute in background with retry logic")
-print("JS Runner: Monitoring thread started - status updates every 30 seconds")
 print("JS Runner: Logs will stream directly to console without interception")
-
-def get_js_status():
-    """Get current status of background JS execution"""
-    global _js_running, _js_output
-    return {
-        "running": _js_running,
-        "output": _js_output,
-        "thread_alive": _js_thread.is_alive() if _js_thread else False
-    }
-
-# No ComfyUI node exports - just background execution
 __all__ = []

@@ -3048,24 +3048,23 @@ var syncTaskStatus = async (id) => {
     task.files = JSON.parse(task.files);
   const files = Array.isArray(task.files) ? await Promise.all(task.files.map(async (file) => {
     const localFile = Bun.file(path2.join(COMFYUI_DIR, file));
-    return new File([await localFile.arrayBuffer()], localFile.name, {
+    const filename = localFile.name?.split("/").pop() || localFile.name;
+    return new File([await localFile.arrayBuffer()], filename, {
       type: localFile.type
     });
   })) : [];
   console.log({ files });
   await api.client.updateTask({
     id,
-    files: files.at(0),
-    data: {
-      status: task.status,
-      ended_at: task.ended_at,
-      queued_at: task.queued_at,
-      started_at: task.started_at,
-      error: task.error,
-      active_node_id: task.active_node_id,
-      progress: task.progress,
-      logs: task.logs
-    }
+    files,
+    status: task.status,
+    ended_at: task.ended_at,
+    queued_at: task.queued_at,
+    started_at: task.started_at,
+    error: task.error,
+    active_node_id: task.active_node_id,
+    progress: task.progress,
+    logs: task.logs
   });
 };
 
@@ -3226,7 +3225,8 @@ comfyApi2.on("execution_success", async (e) => {
     files: JSON.stringify(files)
   });
   const task = getTaskByPromptId(prompt_id);
-  await syncTaskStatus(task.id);
+  if (task)
+    await syncTaskStatus(task.id);
 });
 
 // src/dependency/index.ts
