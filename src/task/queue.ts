@@ -32,7 +32,7 @@ export const queueTask = async (data: QueueTaskData) => {
 	const { id: task_id } = data;
 
 	const prompt = await getWorkflow(data.prompt);
-	const isDuplicate = await isDuplicateTask(task_id);
+	const isDuplicate = false; // await isDuplicateTask(task_id);
 	console.log({ isDuplicate });
 	if (!isDuplicate) {
 		const resp = await comfyApi.appendPrompt(prompt).catch((e) => {

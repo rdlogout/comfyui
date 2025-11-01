@@ -3056,27 +3056,10 @@ var syncTaskStatus = async (id) => {
 // src/task/queue.ts
 import path4 from "path";
 import fs2 from "fs/promises";
-var isDuplicateTask = async (task_id) => {
-  const task = taskDB.get(task_id);
-  const prompt_id = task?.data?.prompt_id;
-  const success = task?.data?.status === "success";
-  if (prompt_id) {
-    if (success)
-      return true;
-    const queue = await comfyApi.getQueue();
-    const in_queue = !!queue?.queue_pending?.find((item) => Object.values(item).includes(prompt_id));
-    const is_running = !!queue?.queue_running?.find((item) => Object.values(item).includes(prompt_id));
-    if (in_queue || is_running) {
-      console.log(`Task ${task_id} is already in queue or running with prompt id ${prompt_id}`);
-      return true;
-    }
-  }
-  return false;
-};
 var queueTask = async (data) => {
   const { id: task_id } = data;
   const prompt = await getWorkflow(data.prompt);
-  const isDuplicate = await isDuplicateTask(task_id);
+  const isDuplicate = false;
   console.log({ isDuplicate });
   if (!isDuplicate) {
     const resp = await comfyApi.appendPrompt(prompt).catch((e) => {
