@@ -2990,7 +2990,7 @@ class TaskDB {
   }
   insert(id) {
     const existingTask = this.get(id);
-    if (existingTask?.data?.prompt_id)
+    if (existingTask)
       return existingTask;
     db.run(`INSERT INTO tasks (id) VALUES (?)`, [id]);
     return { id, data: {} };
@@ -2999,10 +2999,16 @@ class TaskDB {
     const task = this.insert(id);
     task.data = Object.assign({}, task.data, data);
     const prompt_id = task.data.prompt_id;
-    db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
-    if (prompt_id)
-      db.run(`UPDATE tasks SET prompt_id = ? WHERE id = ?`, [prompt_id, id]);
-    return true;
+    const result = db.run(`UPDATE tasks SET data = ? WHERE id = ?`, [JSON.stringify(task.data), id]);
+    if (prompt_id) {
+      const promptResult = db.run(`UPDATE tasks SET prompt_id = ? WHERE id = ?`, [prompt_id, id]);
+      if (promptResult.changes === 0) {
+        console.log("Failed to update prompt_id", prompt_id);
+        return false;
+      }
+      console.log("Updated prompt_id", prompt_id, id, result);
+    }
+    return result.changes > 0;
   }
   updateByPromptId(prompt_id, data = {}) {
     const task = this.get(prompt_id, "prompt_id");
