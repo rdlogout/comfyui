@@ -1,5 +1,4 @@
 import { api } from "src/lib/api";
-import { comfyApi } from "src/lib/comfyui";
 import { COMFYUI_DIR } from "src/lib/config";
 import * as path from "path";
 import { getTask } from "src/lib/db";
@@ -33,7 +32,6 @@ export const syncTaskStatus = async (id: string) => {
 	console.log({ files });
 	const dataToSend = {
 		id,
-		files: files,
 		status: task.status,
 		ended_at: task.ended_at,
 		queued_at: task.queued_at,

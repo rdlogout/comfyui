@@ -3065,7 +3065,6 @@ var syncTaskStatus = async (id) => {
   console.log({ files });
   const dataToSend = {
     id,
-    files,
     status: task.status,
     ended_at: task.ended_at,
     queued_at: task.queued_at,
