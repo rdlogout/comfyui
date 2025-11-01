@@ -43,6 +43,7 @@ export const onSuccess = async (e: CustomEvent<TExecution>) => {
 		console.log(`Error: History Not found`);
 		return;
 	}
+	const is_error = history.status?.status_str.toLocaleLowerCase() === "error";
 	const error_msg = history.status?.status_str;
 	// console.log({ history });
 	const files = Object.values(history?.outputs || {})
@@ -55,7 +56,7 @@ export const onSuccess = async (e: CustomEvent<TExecution>) => {
 		})
 		.filter(Boolean);
 	taskDB.updateByPromptId(prompt_id, {
-		status: error_msg ? "failed" : "success",
+		status: is_error ? "failed" : "success",
 		ended_at: new Date().toISOString(),
 		files: files,
 		error: error_msg,

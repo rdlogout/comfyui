@@ -27,7 +27,7 @@ const isDuplicateTask = async (task_id: string) => {
 	}
 	return false;
 };
-
+//sku,date,mobile
 export const queueTask = async (data: QueueTaskData) => {
 	const { id: task_id } = data;
 

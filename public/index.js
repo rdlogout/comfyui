@@ -3223,6 +3223,7 @@ var onSuccess2 = async (e) => {
     console.log(`Error: History Not found`);
     return;
   }
+  const is_error = history.status?.status_str.toLocaleLowerCase() === "error";
   const error_msg = history.status?.status_str;
   const files = Object.values(history?.outputs || {}).map((output) => Object.values(output).flat()).flat().map((item) => {
     if (item.type !== "output")
@@ -3230,7 +3231,7 @@ var onSuccess2 = async (e) => {
     return path5.join("output", item.subfolder, item.filename);
   }).filter(Boolean);
   taskDB.updateByPromptId(prompt_id, {
-    status: error_msg ? "failed" : "success",
+    status: is_error ? "failed" : "success",
     ended_at: new Date().toISOString(),
     files,
     error: error_msg
