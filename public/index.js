@@ -3059,14 +3059,10 @@ import fs2 from "fs/promises";
 var isDuplicateTask = async (task_id) => {
   const task = taskDB.get(task_id);
   const prompt_id = task?.data?.prompt_id;
-  const status = task?.data?.status;
-  console.log({ prompt_id, status });
-  if (prompt_id && status !== "success") {
-    const history = await comfyApi.getHistory(prompt_id);
-    if (history) {
-      console.log(`Task already executed with prompt id ${prompt_id}`);
+  const success = task?.data?.status === "success";
+  if (prompt_id) {
+    if (success)
       return true;
-    }
     const queue = await comfyApi.getQueue();
     const in_queue = !!queue?.queue_pending?.find((item) => Object.values(item).includes(prompt_id));
     const is_running = !!queue?.queue_running?.find((item) => Object.values(item).includes(prompt_id));
