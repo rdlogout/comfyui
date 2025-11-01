@@ -1,5 +1,4 @@
 import path from "path";
-import crypto from "crypto";
 import fs from "fs/promises";
 import { taskDB } from "src/lib/db";
 import { comfyApi } from "src/lib/services";
@@ -16,6 +15,7 @@ const isDuplicateTask = async (task_id: string) => {
 	const task = taskDB.get(task_id);
 	const prompt_id = task?.data?.prompt_id;
 	const status = task?.data?.status;
+	console.log({ prompt_id, status });
 	if (prompt_id && status !== "success") {
 		const history = await comfyApi.getHistory(prompt_id);
 		if (history) {
@@ -172,6 +172,7 @@ async function downloadFile(url: string, filename: string): Promise<void> {
 	const comfyuiPath = COMFYUI_DIR;
 	const inputDir = path.join(comfyuiPath, "input");
 	await fs.mkdir(inputDir, { recursive: true });
+	console.log(`Downloading file ${filename} to ${path.join(inputDir, filename)}`);
 
 	const resp = await fetch(url);
 	const arrayBuffer = await resp.arrayBuffer();
@@ -181,24 +182,15 @@ async function downloadFile(url: string, filename: string): Promise<void> {
 
 async function downloadAndReplaceUrl(url: string): Promise<string> {
 	if (!isTargetUrl(url)) {
-		console.log(url);
 		return url;
 	}
 
-	// Generate unique filename
-	const originalFilename = url.split("/").pop() || "input";
-	const extension = path.extname(originalFilename);
-	const baseName = path.basename(originalFilename, extension);
-	const uniqueId = crypto.randomUUID().substring(0, 8);
-	const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
-
-	console.log("Downloading file", {
-		url,
-		uniqueFilename,
-	});
+	const filename = new URL(url).pathname.split("/").pop() || "input";
+	console.log(`Downloading file ${filename} from ${url}`);
+	//check if file exist
+	const fileExist = Bun.file(path.join(COMFYUI_DIR, "input", filename)).exists();
+	if (!fileExist) await downloadFile(url, filename);
 
 	// Download file using streaming-friendly service
-	await downloadFile(url, uniqueFilename);
-	console.log("Downloaded file to", uniqueFilename);
-	return uniqueFilename;
+	return filename;
 }

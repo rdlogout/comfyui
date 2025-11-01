@@ -61,7 +61,7 @@ class TaskDB {
 				console.log("Failed to update prompt_id", prompt_id);
 				return false;
 			}
-			console.log("Updated prompt_id", prompt_id, id, result);
+			// console.log("Updated prompt_id", prompt_id, id, result);
 		}
 		return result.changes > 0;
 	}

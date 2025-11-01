@@ -3006,7 +3006,6 @@ class TaskDB {
         console.log("Failed to update prompt_id", prompt_id);
         return false;
       }
-      console.log("Updated prompt_id", prompt_id, id, result);
     }
     return result.changes > 0;
   }
@@ -3056,12 +3055,12 @@ var syncTaskStatus = async (id) => {
 
 // src/task/queue.ts
 import path4 from "path";
-import crypto from "crypto";
 import fs2 from "fs/promises";
 var isDuplicateTask = async (task_id) => {
   const task = taskDB.get(task_id);
   const prompt_id = task?.data?.prompt_id;
   const status = task?.data?.status;
+  console.log({ prompt_id, status });
   if (prompt_id && status !== "success") {
     const history = await comfyApi.getHistory(prompt_id);
     if (history) {
@@ -3189,6 +3188,7 @@ async function downloadFile(url, filename) {
   const comfyuiPath = COMFYUI_DIR;
   const inputDir = path4.join(comfyuiPath, "input");
   await fs2.mkdir(inputDir, { recursive: true });
+  console.log(`Downloading file ${filename} to ${path4.join(inputDir, filename)}`);
   const resp = await fetch(url);
   const arrayBuffer = await resp.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
@@ -3196,21 +3196,14 @@ async function downloadFile(url, filename) {
 }
 async function downloadAndReplaceUrl(url) {
   if (!isTargetUrl(url)) {
-    console.log(url);
     return url;
   }
-  const originalFilename = url.split("/").pop() || "input";
-  const extension = path4.extname(originalFilename);
-  const baseName = path4.basename(originalFilename, extension);
-  const uniqueId = crypto.randomUUID().substring(0, 8);
-  const uniqueFilename = `${baseName}_${uniqueId}${extension}`;
-  console.log("Downloading file", {
-    url,
-    uniqueFilename
-  });
-  await downloadFile(url, uniqueFilename);
-  console.log("Downloaded file to", uniqueFilename);
-  return uniqueFilename;
+  const filename = new URL(url).pathname.split("/").pop() || "input";
+  console.log(`Downloading file ${filename} from ${url}`);
+  const fileExist = Bun.file(path4.join(COMFYUI_DIR, "input", filename)).exists();
+  if (!fileExist)
+    await downloadFile(url, filename);
+  return filename;
 }
 
 // src/lib/events.ts
