@@ -3082,24 +3082,24 @@ var queueTask = async (data) => {
   const { id: task_id } = data;
   const prompt = await getWorkflow(data.prompt);
   const isDuplicate = await isDuplicateTask(task_id);
-  if (isDuplicate) {
-    return;
+  if (!isDuplicate) {
+    const resp = await comfyApi.appendPrompt(prompt).catch((e) => {
+      console.log("failed to queue task", task_id, e);
+      return {
+        prompt_id: "",
+        error: `Failed to queue task : ${e.message}`
+      };
+    });
+    const prompt_id = resp?.prompt_id;
+    const error = resp?.error;
+    taskDB.updateById(task_id, {
+      prompt_id,
+      status: "inqueue",
+      progress: 0,
+      queued_at: new Date().toISOString(),
+      error
+    });
   }
-  const resp = await comfyApi.appendPrompt(prompt).catch((e) => {
-    console.log("failed to queue task", task_id, e);
-    return {
-      prompt_id: "",
-      error: `Failed to queue task : ${e.message}`
-    };
-  });
-  const prompt_id = resp?.prompt_id;
-  const error = resp?.error;
-  taskDB.updateById(task_id, {
-    prompt_id,
-    status: "inqueue",
-    queued_at: new Date().toISOString(),
-    error
-  });
   await syncTaskStatus(task_id);
 };
 async function getWorkflow(workflowInput) {

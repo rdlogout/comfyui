@@ -20,7 +20,6 @@ export const syncTaskStatus = async (id: string) => {
 		? await Promise.all(
 				data.files.map(async (file) => {
 					const localFile = Bun.file(path.join(COMFYUI_DIR, file));
-					// return localFile;
 					const filename = localFile.name?.split("/").pop() || localFile.name;
 					return new File([await localFile.arrayBuffer()], filename!, {
 						type: localFile.type,
