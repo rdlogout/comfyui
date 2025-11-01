@@ -3071,6 +3071,7 @@ var queueTask = async (data) => {
     });
     const prompt_id = resp?.prompt_id;
     const error = resp?.error;
+    console.log(`Queued task ${task_id} with prompt id ${prompt_id}`, error);
     taskDB.updateById(task_id, {
       prompt_id,
       status: "inqueue",
