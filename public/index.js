@@ -3215,7 +3215,7 @@ var onProgress = (e) => {
     active_node_id: node || ""
   });
 };
-var onError2 = (e) => {
+var onError2 = async (e) => {
   const { prompt_id } = e.detail;
   console.log(`Error: ${e.detail.exception_message}`);
   taskDB.updateByPromptId(prompt_id, {
@@ -3223,6 +3223,7 @@ var onError2 = (e) => {
     status: "failed",
     ended_at: new Date().toISOString()
   });
+  await syncTaskStatus(prompt_id);
 };
 var onStart2 = (e) => {
   const { prompt_id } = e.detail;
@@ -3285,6 +3286,9 @@ backendSocket.onmessage = async (e) => {
 };
 comfyApi.on("progress", onProgress);
 comfyApi.on("execution_error", onError2);
+comfyApi.on("queue_error", (e) => {
+  console.log(`Queue Error: ${e.detail.message}`);
+});
 comfyApi.on("execution_start", onStart2);
 comfyApi.on("execution_success", onSuccess2);
 console.log("Starting ComfyUI backend client");

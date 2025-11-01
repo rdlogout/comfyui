@@ -15,7 +15,7 @@ export const onProgress = (e: CustomEvent<TProgress>) => {
 	});
 };
 
-export const onError = (e: CustomEvent<TExecutionError>) => {
+export const onError = async (e: CustomEvent<TExecutionError>) => {
 	const { prompt_id } = e.detail;
 	console.log(`Error: ${e.detail.exception_message}`);
 	taskDB.updateByPromptId(prompt_id, {
@@ -23,6 +23,7 @@ export const onError = (e: CustomEvent<TExecutionError>) => {
 		status: "failed",
 		ended_at: new Date().toISOString(),
 	});
+	await syncTaskStatus(prompt_id);
 };
 
 export const onStart = (e: CustomEvent<TExecution>) => {
