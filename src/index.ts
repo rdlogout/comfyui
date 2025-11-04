@@ -19,7 +19,10 @@ const actions: Record<string, (data?: any) => Promise<any>> = {
 	queueTask,
 };
 
-const backendSocket = new ReconnectingWebSocket(`${WS_URL}/ws/machine?id=${MACHINE_ID}`);
+const backendSocket = new ReconnectingWebSocket(`${WS_URL}/ws/machine?id=${MACHINE_ID}`, [], {
+	debug: true,
+	maxRetries: 100,
+});
 backendSocket.onopen = () => {
 	console.log("Connected to ComfyUI backend");
 };
@@ -49,3 +52,7 @@ comfyApi.on("queue_error", (e) => {
 comfyApi.on("execution_start", onStart);
 comfyApi.on("execution_success", onSuccess);
 console.log("Starting ComfyUI backend client");
+
+setInterval(() => {
+	if (backendSocket.readyState === WebSocket.OPEN) backendSocket.send(JSON.stringify(["ping"]));
+}, 30 * 1000);

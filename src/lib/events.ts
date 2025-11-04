@@ -28,6 +28,7 @@ export const onError = async (e: CustomEvent<TExecutionError>) => {
 
 export const onStart = (e: CustomEvent<TExecution>) => {
 	const { prompt_id } = e.detail;
+	console.log(`Start: ${prompt_id}`);
 	// console.log(`Start: ${prompt_id}`);
 	taskDB.updateByPromptId(prompt_id, {
 		status: "running",
@@ -51,7 +52,6 @@ export const onSuccess = async (e: CustomEvent<TExecution>) => {
 		.flat()
 		.map((item: any) => {
 			if (item.type !== "output") Bun.write(path.join(COMFYUI_DIR, "output", item.filename), Bun.file(path.join(COMFYUI_DIR, "temp", item.subfolder, item.filename)));
-
 			return path.join("output", item.subfolder, item.filename);
 		})
 		.filter(Boolean);
