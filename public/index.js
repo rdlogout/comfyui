@@ -3607,13 +3607,26 @@ async function downloadAndReplaceUrl(url) {
 
 // src/lib/events.ts
 import * as path5 from "path";
+var reqThrottleMap = new Map;
+var syncToServer = async (prompt_id) => {
+  const task = taskDB.get(prompt_id, "prompt_id");
+  if (task)
+    await syncTaskStatus(task.id);
+};
 var onProgress = (e) => {
   const { prompt_id, max, value: value2, node } = e.detail;
   const percentage = value2 / max * 100;
+  console.log(`Progress: ${percentage.toFixed(2)}% (${value2}/${max})`);
   taskDB.updateByPromptId(prompt_id, {
     progress: percentage,
+    status: "running",
     active_node_id: node || ""
   });
+  const lastUpdate = reqThrottleMap.get(prompt_id);
+  if (!lastUpdate || lastUpdate.getTime() < Date.now() - 1000) {
+    reqThrottleMap.set(prompt_id, new Date);
+    syncToServer(prompt_id);
+  }
 };
 var onError2 = async (e) => {
   const { prompt_id } = e.detail;
@@ -3623,9 +3636,9 @@ var onError2 = async (e) => {
     status: "failed",
     ended_at: new Date().toISOString()
   });
-  await syncTaskStatus(prompt_id);
+  syncToServer(prompt_id);
 };
-var onStart2 = (e) => {
+var onStart2 = async (e) => {
   const { prompt_id } = e.detail;
   console.log(`Start: ${prompt_id}`);
   taskDB.updateByPromptId(prompt_id, {
@@ -3633,6 +3646,7 @@ var onStart2 = (e) => {
     started_at: new Date().toISOString(),
     progress: 0
   });
+  await syncToServer(prompt_id);
 };
 var onSuccess2 = async (e) => {
   const { prompt_id } = e.detail;
@@ -3654,9 +3668,7 @@ var onSuccess2 = async (e) => {
     files,
     error: error_msg
   });
-  const task = taskDB.get(prompt_id, "prompt_id");
-  if (task)
-    await syncTaskStatus(task.id);
+  await syncToServer(prompt_id);
 };
 
 // src/index.ts
@@ -3697,9 +3709,6 @@ backendSocket.onmessage = async (e) => {
 };
 comfyApi.on("progress", onProgress);
 comfyApi.on("execution_error", onError2);
-comfyApi.on("queue_error", (e) => {
-  console.log(`Queue Error: ${e.detail.message}`);
-});
 comfyApi.on("execution_start", onStart2);
 comfyApi.on("execution_success", onSuccess2);
 console.log("Starting ComfyUI backend client");

@@ -5,14 +5,30 @@ import { syncTaskStatus } from "src/task";
 import { COMFYUI_DIR } from "./config";
 import * as path from "path";
 
+const reqThrottleMap = new Map<string, Date>();
+
+const syncToServer = async (prompt_id: string) => {
+	const task = taskDB.get(prompt_id, "prompt_id");
+	if (task) await syncTaskStatus(task.id);
+};
+
 export const onProgress = (e: CustomEvent<TProgress>) => {
 	const { prompt_id, max, value, node } = e.detail;
 	const percentage = (value / max) * 100;
-	// console.log(`Progress: ${percentage.toFixed(2)}% (${value}/${max})`);
+	console.log(`Progress: ${percentage.toFixed(2)}% (${value}/${max})`);
 	taskDB.updateByPromptId(prompt_id, {
 		progress: percentage,
+		status: "running",
 		active_node_id: node || "",
 	});
+	const lastUpdate = reqThrottleMap.get(prompt_id);
+	//wait for 1 sec before sync
+	if (!lastUpdate || lastUpdate.getTime() < Date.now() - 1000) {
+		reqThrottleMap.set(prompt_id, new Date());
+		syncToServer(prompt_id);
+	}
+
+	// if(!lastUpdate)
 };
 
 export const onError = async (e: CustomEvent<TExecutionError>) => {
@@ -23,10 +39,10 @@ export const onError = async (e: CustomEvent<TExecutionError>) => {
 		status: "failed",
 		ended_at: new Date().toISOString(),
 	});
-	await syncTaskStatus(prompt_id);
+	syncToServer(prompt_id);
 };
 
-export const onStart = (e: CustomEvent<TExecution>) => {
+export const onStart = async (e: CustomEvent<TExecution>) => {
 	const { prompt_id } = e.detail;
 	console.log(`Start: ${prompt_id}`);
 	// console.log(`Start: ${prompt_id}`);
@@ -35,6 +51,7 @@ export const onStart = (e: CustomEvent<TExecution>) => {
 		started_at: new Date().toISOString(),
 		progress: 0,
 	});
+	await syncToServer(prompt_id);
 };
 
 export const onSuccess = async (e: CustomEvent<TExecution>) => {
@@ -62,6 +79,15 @@ export const onSuccess = async (e: CustomEvent<TExecution>) => {
 		error: error_msg,
 	});
 
-	const task = taskDB.get(prompt_id, "prompt_id");
-	if (task) await syncTaskStatus(task.id);
+	await syncToServer(prompt_id);
+};
+
+export const onQueueError = async (e: CustomEvent<Error>) => {
+	console.log(`Queue Error: ${e.detail?.message}`);
+	// taskDB.updateByPromptId(prompt_id, {
+	// 	error: e.detail.message,
+	// 	status: "failed",
+	// 	ended_at: new Date().toISOString(),
+	// });
+	// await syncToServer(prompt_id);
 };
